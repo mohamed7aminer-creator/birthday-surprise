@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Happy Birthday Fatima</title>
+<link href="https://fonts.googleapis.com/css2?family=Great+Vibes&family=Poppins:wght@300;500&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin:0; height:100%; overflow:hidden; background:#140f2a; }
+  body { font-family:'Poppins', sans-serif; color:#fff; user-select:none; -webkit-tap-highlight-color:transparent; }
+  canvas { display:block; touch-action:none; }
+
+  #vignette { position:fixed; inset:0; pointer-events:none; z-index:2;
+    background: radial-gradient(ellipse at 50% 45%, transparent 50%, rgba(0,0,0,.55) 100%); }
+
+  /* start screen (live page only — audio needs one tap) */
+  #start { position:fixed; inset:0; z-index:20; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px;
+    background:#140f2a; text-align:center; padding:16px; transition: opacity 1s, visibility 1s; cursor:pointer; }
+  #start.hide { opacity:0; visibility:hidden; }
+  #start .h { font-size:84px; animation: beat 1.3s infinite; filter: drop-shadow(0 0 22px #ff5c9a); }
+  #start p { margin:0; font-weight:300; font-size:clamp(17px,4.5vw,22px); color:#ffe3ef; }
+  #start small { opacity:.55; font-size:13px; }
+  @keyframes beat { 0%,100% { transform:scale(1); } 15% { transform:scale(1.22); } 30% { transform:scale(1); } 45% { transform:scale(1.12); } }
+
+  /* bow power bar */
+  #power { position:fixed; z-index:3; width:12px; height:150px; border-radius:8px; overflow:hidden;
+    background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.22); opacity:0; transition:opacity .35s; }
+  #power.show { opacity:1; }
+  #powerFill { position:absolute; left:0; right:0; bottom:0; height:0%;
+    background:linear-gradient(to top, #ff2e63, #ff9cc2); box-shadow:0 0 14px #ff4f8b; }
+
+  #hint { position:fixed; left:50%; bottom:7vh; transform:translateX(-50%); z-index:5; pointer-events:none;
+    padding:11px 22px; border-radius:40px; font-size:clamp(14px,3.8vw,17px); white-space:nowrap;
+    background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.18);
+    backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); opacity:0; transition:opacity .5s; }
+  #hint.show { opacity:1; }
+
+  /* gold handwriting */
+  #write { position:fixed; left:50%; top:23%; width:min(96vw, 80vh); transform:translateX(-50%); z-index:4;
+    pointer-events:none; overflow:visible;
+    filter: drop-shadow(0 0 9px rgba(255,196,96,.55)) drop-shadow(0 2px 3px rgba(40,0,20,.7)); }
+  #write .script { font-family:'Great Vibes', cursive; text-anchor:middle; fill:url(#gold);
+    stroke:#fff3cf; stroke-width:1.3; fill-opacity:0; stroke-dasharray:1600; stroke-dashoffset:1600; }
+  #write .sub { font-family:'Poppins', sans-serif; font-weight:300; text-anchor:middle; fill:#ffe6f0; opacity:0; letter-spacing:2px; }
+
+  #again { position:fixed; left:50%; bottom:6vh; transform:translateX(-50%); z-index:6; display:none;
+    font:500 15px 'Poppins', sans-serif; color:#fff; border:0; border-radius:40px; padding:11px 26px; cursor:pointer;
+    background:linear-gradient(135deg,#ff4f9a,#ff8a5c); box-shadow:0 8px 26px #ff4f9a66; }
+</style>
+</head>
+<body>
+
+<div id="start">
+  <div class="h">💘</div>
+  <p>A little surprise for you…</p>
+  <small>tap to begin · sound on 🔊</small>
+</div>
+
+<div id="vignette"></div>
+<div id="power"><div id="powerFill"></div></div>
+<div id="hint"></div>
+<button id="again">Watch again ↻</button>
+
+<svg id="write" viewBox="0 0 1000 560" aria-hidden="true">
+  <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fffbe8"/>
+      <stop offset=".45" stop-color="#ffe08a"/>
+      <stop offset=".75" stop-color="#d9a441"/>
+      <stop offset="1" stop-color="#fff0c2"/>
+    </linearGradient>
+    <linearGradient id="feather" x1="0" x2="1" y1="0" y2="0">
+      <stop offset="0" stop-color="#fff"/>
+      <stop offset=".93" stop-color="#fff"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="penGlow">
+      <stop offset="0" stop-color="#fff"/>
+      <stop offset=".35" stop-color="#ffe7a6" stop-opacity=".9"/>
+      <stop offset="1" stop-color="#ffb84d" stop-opacity="0"/>
+    </radialGradient>
+    <mask id="m1" maskUnits="userSpaceOnUse" x="0" y="0" width="1000" height="560">
+      <rect id="rev1" x="0" y="0" width="1000" height="265" fill="url(#feather)" style="transform:translateX(-1000px)"/>
+    </mask>
+    <mask id="m2" maskUnits="userSpaceOnUse" x="0" y="0" width="1000" height="560">
+      <rect id="rev2" x="0" y="265" width="1000" height="230" fill="url(#feather)" style="transform:translateX(-1000px)"/>
+    </mask>
+  </defs>
+  <g mask="url(#m1)"><text id="line1" class="script" x="500" y="190" font-size="148">Happy Birthday</text></g>
+  <g mask="url(#m2)"><text id="line2" class="script" x="500" y="438" font-size="225"></text></g>
+  <text id="line3" class="sub" x="500" y="532" font-size="44"></text>
+  <g id="penX1" opacity="0"><g id="penY1"><circle cx="0" cy="150" r="26" fill="url(#penGlow)"/></g></g>
+  <g id="penX2" opacity="0"><g id="penY2"><circle cx="0" cy="370" r="32" fill="url(#penGlow)"/></g></g>
+</svg>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/environments/RoomEnvironment.js"></script>
+<script>
+/* =========================================================
+   ✏️  CHANGE THESE TO MAKE IT YOURS
+   ========================================================= */
+const CONFIG = {
+  name: "Fatima",
+  subtitle: "with all my love ❤",
+  candles: 3,
+};
+/* ========================================================= */
+
+const $ = id => document.getElementById(id);
+const rand = (a, b) => a + Math.random() * (b - a);
+const clamp01 = x => Math.min(1, Math.max(0, x));
+const easeOut = x => 1 - Math.pow(1 - x, 3);
+const easeIn = x => x * x * x;
+const easeInOut = x => x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+const backOut = x => { const c = 1.70158; return 1 + (c + 1) * Math.pow(x - 1, 3) + c * Math.pow(x - 1, 2); };
+const elastic = x => x <= 0 ? 0 : x >= 1 ? 1 : Math.pow(2, -10 * x) * Math.sin((x * 10 - .75) * (2 * Math.PI / 3)) + 1;
+const seg = (h, a, b) => clamp01((h - a) / (b - a));      // 0→1 progress of h between a and b
+const TMP = new THREE.Vector3(), TMP2 = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0);
+
+// set only by the video recorder: frame-stepped time + offline audio
+const RECORD = !!window.__RECORD;
+
+/* =========================================================
+   SOUND (all synthesized)
+   ========================================================= */
+let AC, master, bus, noiseBuf;
+function audioInit() {
+  if (AC) return;
+  AC = RECORD ? new OfflineAudioContext(2, 44100 * window.__RECORD.seconds, 44100)
+              : new (window.AudioContext || window.webkitAudioContext)();
+  master = AC.createGain(); master.gain.value = .85; master.connect(AC.destination);
+  bus = AC.createGain(); bus.connect(master);
+  const rev = AC.createConvolver(), len = AC.sampleRate * 2.8, ir = AC.createBuffer(2, len, AC.sampleRate);
+  for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.8); }
+  rev.buffer = ir;
+  const wet = AC.createGain(); wet.gain.value = .32;
+  bus.connect(rev); rev.connect(wet); wet.connect(master);
+  noiseBuf = AC.createBuffer(1, AC.sampleRate * 2, AC.sampleRate);
+  const nd = noiseBuf.getChannelData(0); for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+}
+const now = () => RECORD ? performance.now() / 1000 : AC.currentTime;
+function tone(t, f, dur, o = {}) {
+  const osc = AC.createOscillator(), g = AC.createGain();
+  osc.type = o.type || 'sine'; osc.frequency.setValueAtTime(f, t);
+  if (o.f2) osc.frequency.exponentialRampToValueAtTime(o.f2, t + (o.glide || dur));
+  const a = o.attack ?? .005, v = o.vol ?? .1;
+  g.gain.setValueAtTime(.0001, t); g.gain.linearRampToValueAtTime(v, t + a); g.gain.exponentialRampToValueAtTime(.0001, t + a + dur);
+  let node = osc;
+  if (o.lp) { const fl = AC.createBiquadFilter(); fl.type = 'lowpass'; fl.frequency.value = o.lp; osc.connect(fl); node = fl; }
+  node.connect(g).connect(bus); osc.start(t); osc.stop(t + a + dur + .05);
+}
+function noise(t, dur, o = {}) {
+  const src = AC.createBufferSource(); src.buffer = noiseBuf; src.loop = true;
+  const fl = AC.createBiquadFilter(); fl.type = o.type || 'bandpass';
+  fl.frequency.setValueAtTime(o.f || 1000, t); if (o.f2) fl.frequency.exponentialRampToValueAtTime(o.f2, t + dur); fl.Q.value = o.q ?? 1;
+  const g = AC.createGain(), a = o.attack ?? .005, v = o.vol ?? .2;
+  g.gain.setValueAtTime(.0001, t); g.gain.linearRampToValueAtTime(v, t + a); g.gain.exponentialRampToValueAtTime(.0001, t + a + dur);
+  src.connect(fl).connect(g).connect(bus); src.start(t, Math.random()); src.stop(t + a + dur + .05);
+}
+const bell = (f, d = 0, v = .07, len = 1.4) => { const t = now() + d; tone(t, f, len, { vol:v }); tone(t, f * 2.76, len * .35, { vol:v * .3 }); tone(t, f * 5.4, len * .15, { vol:v * .12 }); };
+const SFX = {
+  creak(dur)  { const t = now(); noise(t, dur, { f:260, f2:900, q:7, vol:.09, attack:.15 }); tone(t, 85, dur, { f2:150, glide:dur, type:'triangle', vol:.05, attack:.2 }); },
+  twang()     { const t = now(); tone(t, 196, .55, { type:'triangle', f2:170, vol:.22 }); tone(t, 392, .25, { vol:.06 }); noise(t, .05, { type:'highpass', f:2500, vol:.25, attack:.001 }); },
+  whoosh()    { noise(now(), .38, { f:700, f2:3200, q:1.5, vol:.3, attack:.04 }); },
+  thunk()     { const t = now(); tone(t, 170, .16, { f2:55, vol:.5 }); noise(t, .08, { type:'lowpass', f:900, vol:.35, attack:.001 }); },
+  sparkle(n = 10, d = 0) { const s = [1568, 1760, 2093, 2349, 2637, 3136]; for (let i = 0; i < n; i++) bell(s[Math.floor(Math.random() * s.length)] * (Math.random() < .3 ? 2 : 1), d + i * .05, .02, .5); },
+  shimmer()   { [523.25, 783.99, 1046.5, 1318.5, 1567.98, 2093].forEach((f, i) => bell(f, i * .07, .06, 1.6)); tone(now(), 260, 1.6, { f2:1040, type:'triangle', vol:.035, attack:.5 }); },
+  thud(note)  { const t = now(); tone(t, 95, .28, { f2:42, vol:.55 }); noise(t, .14, { type:'lowpass', f:320, vol:.4, attack:.002 }); bell(note, .02, .09, 1.2); },
+  fwip()      { noise(now(), .28, { f:500, f2:3600, q:2, vol:.18, attack:.03 }); bell(1800, .05, .025, .4); },
+  pen(dur)    { for (let i = 0; i < dur * 9; i++) noise(now() + i / 9 + Math.random() * .05, .05, { type:'highpass', f:5000, vol:.012 + Math.random() * .012, attack:.01 }); },
+};
+// soft pad underneath everything so the video is never silent
+const PAD = [[130.81, 164.81, 196, 246.94], [110, 130.81, 164.81, 196], [87.31, 130.81, 174.61, 220], [98, 146.83, 196, 246.94]];
+let padIndex = 0, nextPadAt = 0;
+function padChord(freqs, dur, vol = .016) {
+  const t = now();
+  freqs.forEach(f => { tone(t, f, dur, { type:'sawtooth', lp:700, vol, attack:1.1 }); tone(t, f * 2, dur, { vol:vol * .6, attack:1.1 }); });
+}
+const NOTE = { G2:98, B2:123.47, C3:130.81, D3:146.83, E3:164.81, F3:174.61, G3:196, A3:220, C4:261.63,
+  G4:392, A4:440, B4:493.88, C5:523.25, D5:587.33, E5:659.25, F5:698.46, G5:783.99 };
+const MELODY = [
+  ['G4',.75],['G4',.25],['A4',1],['G4',1],['C5',1],['B4',2],
+  ['G4',.75],['G4',.25],['A4',1],['G4',1],['D5',1],['C5',2],
+  ['G4',.75],['G4',.25],['G5',1],['E5',1],['C5',1],['B4',1],['A4',2],
+  ['F5',.75],['F5',.25],['E5',1],['C5',1],['D5',1],['C5',3],
+];
+const CHORD = { C:['C3','E3','G3'], G:['G2','B2','D3'], F:['F3','A3','C4'] };
+const PROG = [['C',3],['G',3],['G',3],['C',3],['C',3],['F',3],['C',3],['G',1],['C',4]];
+let songOn = false;
+function playSong() {
+  songOn = true;
+  const beat = .43, t0 = now() + .2; let t = t0;
+  MELODY.forEach(([n, d]) => {
+    const f = NOTE[n];
+    tone(t, f, d * beat + .9, { vol:.12 }); tone(t, f * 2, .5, { vol:.03 }); tone(t, f * 4.02, .18, { vol:.018 });
+    t += d * beat;
+  });
+  let ct = t0 + beat;
+  PROG.forEach(([c, d]) => { CHORD[c].forEach(n => tone(ct, NOTE[n], d * beat + .4, { type:'sawtooth', lp:850, vol:.015, attack:.3 })); ct += d * beat; });
+  bell(1046.5, t - now() + .1, .05, 2.5); bell(1567.98, t - now() + .1, .04, 2.5);
+}
+
+/* =========================================================
+   THREE.JS
+   ========================================================= */
+const renderer = new THREE.WebGLRenderer({ antialias:true, preserveDrawingBuffer:RECORD });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = .82;
+document.body.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+const BG_NIGHT = new THREE.Color(0x140f2a), BG_ROSE = new THREE.Color(0x3b0f2c);
+scene.background = BG_NIGHT.clone();
+scene.fog = new THREE.Fog(BG_NIGHT.clone(), 16, 34);
+if (THREE.RoomEnvironment) {
+  const pm = new THREE.PMREMGenerator(renderer);
+  scene.environment = pm.fromScene(new THREE.RoomEnvironment(), .04).texture;
+}
+
+const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, .1, 100);
+const camTarget = new THREE.Vector3();
+
+scene.add(new THREE.HemisphereLight(0xffe6f2, 0x2a1030, .35));
+const key = new THREE.DirectionalLight(0xffffff, .75); key.position.set(3, 6, 8); scene.add(key);
+const rim = new THREE.DirectionalLight(0xff9ecf, .6); rim.position.set(-5, 3, -6); scene.add(rim);
+
+const mat = (color, o = {}) => new THREE.MeshStandardMaterial(Object.assign({ color, roughness:.5, metalness:0, envMapIntensity:.22 }, o));
+function canvasTex(w, h, draw) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h);
+  const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; return t;
+}
+const radial = (stops) => canvasTex(128, 128, (g, w) => {
+  const gr = g.createRadialGradient(w/2, w/2, 0, w/2, w/2, w/2);
+  stops.forEach(([o, c]) => gr.addColorStop(o, c)); g.fillStyle = gr; g.fillRect(0, 0, w, w);
+});
+const dotTex = radial([[0, 'rgba(255,255,255,1)'], [.3, 'rgba(255,255,255,.75)'], [1, 'rgba(255,255,255,0)']]);
+const goldGlowTex = radial([[0, 'rgba(255,240,190,1)'], [.35, 'rgba(255,200,90,.55)'], [1, 'rgba(255,170,40,0)']]);
+const flameTex = canvasTex(64, 128, (g, w, h) => {
+  const gr = g.createRadialGradient(w/2, h*.68, 2, w/2, h*.6, w/2);
+  gr.addColorStop(0, 'rgba(255,255,240,1)'); gr.addColorStop(.25, 'rgba(255,230,120,.95)');
+  gr.addColorStop(.6, 'rgba(255,140,40,.6)'); gr.addColorStop(1, 'rgba(255,60,0,0)');
+  g.fillStyle = gr; g.beginPath(); g.ellipse(w/2, h*.6, w/2, h*.42, 0, 0, Math.PI*2); g.fill();
+});
+const stripeTex = canvasTex(64, 64, (g, w) => {
+  g.fillStyle = '#fff7fb'; g.fillRect(0, 0, w, w); g.strokeStyle = '#ff7aa8'; g.lineWidth = 9;
+  for (let i = -w; i < w * 2; i += 20) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i + w, w); g.stroke(); }
+});
+stripeTex.wrapS = stripeTex.wrapT = THREE.RepeatWrapping; stripeTex.repeat.set(1, 2);
+
+function heartGeometry(depth, bevel, thick) {
+  const s = new THREE.Shape();
+  s.moveTo(.25, .25);
+  s.bezierCurveTo(.25, .25, .2, 0, 0, 0);
+  s.bezierCurveTo(-.3, 0, -.3, .35, -.3, .35);
+  s.bezierCurveTo(-.3, .55, -.1, .77, .25, .95);
+  s.bezierCurveTo(.6, .77, .8, .55, .8, .35);
+  s.bezierCurveTo(.8, .35, .8, 0, .5, 0);
+  s.bezierCurveTo(.35, 0, .25, .25, .25, .25);
+  const g = new THREE.ExtrudeGeometry(s, { depth, bevelEnabled:true, bevelSize:bevel, bevelThickness:thick, bevelSegments:8, curveSegments:32 });
+  g.center(); g.rotateZ(Math.PI);
+  return g;
+}
+function placeBetween(m, a, b) {
+  m.position.copy(a).add(b).multiplyScalar(.5);
+  const d = TMP2.subVectors(b, a); const len = d.length();
+  m.scale.set(1, len, 1); m.quaternion.setFromUnitVectors(UP, d.normalize());
+}
+
+/* ---------------- floating dust ---------------- */
+const dust = (() => {
+  const n = 380, p = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) p.set([rand(-9, 9), rand(-7, 9), rand(-12, 2)], i * 3);
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(p, 3));
+  const pts = new THREE.Points(g, new THREE.PointsMaterial({ size:.07, map:dotTex, color:0xffd6ea, transparent:true, opacity:.55, depthWrite:false, blending:THREE.AdditiveBlending }));
+  scene.add(pts); return pts;
+})();
+
+/* ---------------- the heart ---------------- */
+const HEART_POS = new THREE.Vector3(.75, 3.1, 0);
+const heart = new THREE.Mesh(heartGeometry(.32, .14, .17), mat(0xff5c98, { roughness:.4, envMapIntensity:.35 }));
+heart.position.copy(HEART_POS); heart.scale.setScalar(.0001); scene.add(heart);
+
+/* ---------------- bow + arrow ---------------- */
+const BOW_POS = new THREE.Vector3(-1.75, -.55, .4);
+const AIM = Math.atan2(HEART_POS.y - BOW_POS.y, HEART_POS.x - BOW_POS.x);
+const bow = new THREE.Group(); bow.position.copy(BOW_POS); scene.add(bow);
+const bowBody = new THREE.Group(); bow.add(bowBody);
+const TIP_T = new THREE.Vector3(-.18, 1.2, 0), TIP_B = new THREE.Vector3(-.18, -1.2, 0);
+(() => {
+  const pts = [[-.18, 1.2], [.06, 1.02], [.28, .58], [.38, .14], [.38, -.14], [.28, -.58], [.06, -1.02], [-.18, -1.2]].map(([x, y]) => new THREE.Vector3(x, y, 0));
+  bowBody.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 90, .046, 12, false), mat(0xeadcc2, { roughness:.32, envMapIntensity:.8 })));
+  const grip = new THREE.Mesh(new THREE.CylinderGeometry(.078, .078, .44, 16), mat(0x7b5a3c, { roughness:.8 }));
+  grip.position.set(.38, 0, 0); bowBody.add(grip);
+  [-.23, .23].forEach(y => { const r = new THREE.Mesh(new THREE.TorusGeometry(.08, .018, 8, 20), mat(0xe2b553, { metalness:1, roughness:.3, envMapIntensity:1.2 })); r.rotation.x = Math.PI / 2; r.position.set(.38, y, 0); bowBody.add(r); });
+  [TIP_T, TIP_B].forEach(p => { const s = new THREE.Mesh(new THREE.SphereGeometry(.055, 12, 10), mat(0xe2b553, { metalness:1, roughness:.3, envMapIntensity:1.2 })); s.position.copy(p); bowBody.add(s); });
+})();
+const strMat = new THREE.MeshBasicMaterial({ color:0xf6f0ff });
+const strA = new THREE.Mesh(new THREE.CylinderGeometry(.011, .011, 1, 6), strMat);
+const strB = strA.clone(); bow.add(strA, strB);
+const nock = new THREE.Vector3(-.18, 0, 0);
+
+const ARROW_LEN = 2.2;
+const arrow = new THREE.Group();
+(() => {
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(.022, .022, 1.98, 10), mat(0xf4ecdc, { roughness:.4 }));
+  shaft.rotation.z = -Math.PI / 2; shaft.position.x = .99; arrow.add(shaft);
+  const head = new THREE.Mesh(new THREE.ConeGeometry(.07, .24, 16), mat(0xd9dde8, { metalness:1, roughness:.25, envMapIntensity:1.3 }));
+  head.rotation.z = -Math.PI / 2; head.position.x = 2.08; arrow.add(head);
+  const fMat = mat(0xffffff, { side:THREE.DoubleSide, roughness:.6 });
+  [0, Math.PI / 2].forEach(r => {
+    const f = new THREE.Mesh(new THREE.PlaneGeometry(.36, .13), fMat); f.position.x = .24; f.rotation.x = r; arrow.add(f);
+  });
+  const nk = new THREE.Mesh(new THREE.CylinderGeometry(.03, .03, .06, 8), mat(0xff5c9a)); nk.rotation.z = Math.PI / 2; nk.position.x = .02; arrow.add(nk);
+})();
+arrow.position.set(-.18, 0, .07); bow.add(arrow);
+
+/* ---------------- golden plate ---------------- */
+const PLATE_POS = new THREE.Vector3(0, -2.25, 0);
+const plate = new THREE.Group(); plate.visible = false; scene.add(plate);
+const goldMat = mat(0xd19a2a, { metalness:1, roughness:.3, envMapIntensity:1.1 });
+(() => {
+  const disc = new THREE.Mesh(new THREE.CylinderGeometry(1.95, 1.82, .13, 80), goldMat); plate.add(disc);
+  const lip = new THREE.Mesh(new THREE.TorusGeometry(1.94, .045, 12, 90), mat(0xf0c050, { metalness:1, roughness:.18, envMapIntensity:1.3 }));
+  lip.rotation.x = Math.PI / 2; lip.position.y = .06; plate.add(lip);
+})();
+const plateGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map:goldGlowTex, transparent:true, depthWrite:false, blending:THREE.AdditiveBlending, opacity:0 }));
+plateGlow.scale.set(6.5, 2.2, 1); scene.add(plateGlow);
+
+/* ---------------- cake ---------------- */
+const cake = new THREE.Group(); cake.position.copy(PLATE_POS); scene.add(cake);
+function makeTier(r, h, body, frost, drip) {
+  const g = new THREE.Group();
+  const b = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, 72), mat(body, { roughness:.62 })); b.position.y = h / 2; g.add(b);
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(r + .03, r + .03, .1, 72), mat(frost, { roughness:.35 })); cap.position.y = h - .02; g.add(cap);
+  const edge = new THREE.Mesh(new THREE.TorusGeometry(r + .01, .065, 12, 80), mat(frost, { roughness:.35 })); edge.rotation.x = Math.PI / 2; edge.position.y = h + .02; g.add(edge);
+  const dm = mat(drip, { roughness:.3 });
+  const n = Math.round(r * 10);
+  for (let i = 0; i < n; i++) {
+    const a = i / n * Math.PI * 2 + rand(-.06, .06), L = rand(.12, h * .42), rr = r + .035;
+    const d = new THREE.Mesh(new THREE.CylinderGeometry(.06, .06, L, 10), dm); d.position.set(Math.cos(a) * rr, h - L / 2, Math.sin(a) * rr); g.add(d);
+    const e = new THREE.Mesh(new THREE.SphereGeometry(.065, 10, 8), dm); e.position.set(Math.cos(a) * rr, h - L, Math.sin(a) * rr); g.add(e);
+  }
+  const pm = mat(0xffffff, { roughness:.18, metalness:.2, envMapIntensity:1 });
+  const m = Math.round(r * 15);
+  for (let i = 0; i < m; i++) {
+    const a = i / m * Math.PI * 2, p = new THREE.Mesh(new THREE.SphereGeometry(.055, 10, 8), pm);
+    p.position.set(Math.cos(a) * (r + .03), .055, Math.sin(a) * (r + .03)); g.add(p);
+  }
+  g.visible = false; cake.add(g);
+  return g;
+}
+const TIERS = [
+  { g: makeTier(1.45, .85, 0xf0709f, 0xfff0f5, 0xfff0f5), base: .07,  at: 4.0, note: 523.25 },
+  { g: makeTier(1.05, .72, 0xfbe3ec, 0xf0709f, 0xf0709f), base: .97,  at: 4.8, note: 659.25 },
+  { g: makeTier(.7,   .6,  0xf0709f, 0xfff0f5, 0xc2185b), base: 1.74, at: 5.6, note: 783.99 },
+];
+const CAKE_TOP = 1.74 + .6 + .05;
+const topper = new THREE.Mesh(heartGeometry(.22, .1, .1), mat(0xff2e63, { roughness:.3, envMapIntensity:.8, emissive:0x4a0012 }));
+topper.scale.setScalar(.42); topper.visible = false; cake.add(topper);
+
+const candles = [];
+for (let i = 0; i < CONFIG.candles; i++) {
+  const a = i / CONFIG.candles * Math.PI * 2 + Math.PI / 2 + Math.PI / CONFIG.candles, r = .45;
+  const g = new THREE.Group(); g.position.set(Math.cos(a) * r, CAKE_TOP - .03, Math.sin(a) * r); g.scale.set(1, .0001, 1); g.visible = false; cake.add(g);
+  const c = new THREE.Mesh(new THREE.CylinderGeometry(.045, .045, .42, 14), new THREE.MeshStandardMaterial({ map:stripeTex, roughness:.5, envMapIntensity:.5 }));
+  c.position.y = .21; g.add(c);
+  const flame = new THREE.Sprite(new THREE.SpriteMaterial({ map:flameTex, transparent:true, depthWrite:false, blending:THREE.AdditiveBlending }));
+  flame.position.set(g.position.x, CAKE_TOP + .55, g.position.z); flame.scale.set(.0001, .0001, 1); cake.add(flame);
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map:dotTex, color:0xffa94d, transparent:true, depthWrite:false, blending:THREE.AdditiveBlending, opacity:0 }));
+  glow.position.copy(flame.position); glow.scale.set(.7, .7, 1); cake.add(glow);
+  const light = new THREE.PointLight(0xffa64d, 0, 4, 2); light.position.copy(flame.position); cake.add(light);
+  candles.push({ g, flame, glow, light, at: 6.9 + i * .16, lit:false, seed:rand(0, 50) });
+}
+
+/* ---------------- raining hearts ---------------- */
+const RAIN = 120;
+const rainMesh = new THREE.InstancedMesh(heartGeometry(.14, .07, .07), mat(0xffffff, { roughness:.4, envMapIntensity:.3 }), RAIN);
+rainMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); rainMesh.frustumCulled = false; scene.add(rainMesh);
+const rainPal = [0xff7eb0, 0xff9ec4, 0xff5c96, 0xffbdd6, 0xf06292].map(c => new THREE.Color(c));
+const rain = [];
+const dummy = new THREE.Object3D();
+for (let i = 0; i < RAIN; i++) {
+  rainMesh.setColorAt(i, rainPal[i % rainPal.length]);
+  rain.push({ p:new THREE.Vector3(), r:new THREE.Vector3(), rv:new THREE.Vector3(), v:0, s:0, alive:false, phase:rand(0, 6) });
+  dummy.scale.setScalar(0); dummy.updateMatrix(); rainMesh.setMatrixAt(i, dummy.matrix);
+}
+rainMesh.instanceColor.needsUpdate = true;
+let rainOn = false, rainAcc = 0;
+function rainSpanX() { return 3 + Math.max(0, camera.aspect - .56) * 5; }
+function spawnRain(first) {
+  const d = rain.find(x => !x.alive); if (!d) return;
+  // mostly behind the cake, never right in front of it
+  let x = rand(-rainSpanX(), rainSpanX()), z = rand(-8, 1.5);
+  if (z > -2 && Math.abs(x) < 2.2) z = rand(-8, -2.5);
+  d.p.set(x, camTarget.y + (first ? rand(-2, 6) : rand(5.5, 7)), z);
+  d.v = rand(.9, 1.6); d.s = rand(.24, .46);
+  d.r.set(rand(-.4, .4), rand(0, 6), rand(-.3, .3)); d.rv.set(rand(-.6, .6), rand(-2, 2), rand(-.6, .6));
+  d.alive = true;
+}
+function updateRain(dt, t) {
+  if (rainOn) { rainAcc += dt * 15; while (rainAcc > 1) { rainAcc--; spawnRain(false); } }
+  rain.forEach((d, i) => {
+    if (d.alive) {
+      d.p.y -= d.v * dt; d.p.x += Math.sin(t * 1.3 + d.phase) * dt * .35;
+      d.r.addScaledVector(d.rv, dt);
+      if (d.p.y < camTarget.y - 7) d.alive = false;
+      dummy.position.copy(d.p); dummy.rotation.set(d.r.x, d.r.y, d.r.z); dummy.scale.setScalar(d.s);
+    } else dummy.scale.setScalar(0);
+    dummy.updateMatrix(); rainMesh.setMatrixAt(i, dummy.matrix);
+  });
+  rainMesh.instanceMatrix.needsUpdate = true;
+}
+
+/* ---------------- balloons ---------------- */
+const balloons = [];
+const bCols = [[0xf2c14e, .55, .28], [0xf7f1ee, 0, .18], [0xf7a8c8, 0, .2], [0xf2c14e, .55, .28], [0xffd1e1, 0, .2]];
+for (let i = 0; i < 11; i++) {
+  const [c, met, rough] = bCols[i % bCols.length];
+  const m = mat(c, { metalness:met, roughness:rough, envMapIntensity:.9 });
+  const g = new THREE.Group();
+  const s = new THREE.Mesh(new THREE.SphereGeometry(.42, 32, 24), m); s.scale.y = 1.13; g.add(s);
+  const k = new THREE.Mesh(new THREE.ConeGeometry(.07, .12, 10), m); k.position.y = -.5; g.add(k);
+  g.visible = false; scene.add(g); balloons.push(g);
+}
+let balloonsOn = false;
+function spawnBalloon(b, first) {
+  let x, z; do { x = rand(-rainSpanX() - .5, rainSpanX() + .5); z = rand(-5, 3.5); } while (Math.abs(x) < 1.7 && z > -2.5);
+  b.position.set(x, camTarget.y - (first ? rand(5, 9) : 6.5), z);
+  b.userData = { v:rand(.7, 1.15), ph:rand(0, 6) }; b.visible = true;
+}
+
+/* ---------------- sparkle bursts ---------------- */
+const bursts = [];
+function burst(origin, color, n, speed, o = {}) {
+  const pos = new Float32Array(n * 3), vel = [];
+  for (let i = 0; i < n; i++) {
+    pos.set([origin.x, origin.y, origin.z], i * 3);
+    const th = rand(0, Math.PI * 2), ph = Math.acos(rand(-1, 1)), s = speed * rand(.4, 1);
+    vel.push(new THREE.Vector3(s * Math.sin(ph) * Math.cos(th), s * Math.cos(ph), s * Math.sin(ph) * Math.sin(th)));
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const pts = new THREE.Points(g, new THREE.PointsMaterial({ size:o.size || .12, map:dotTex, color, transparent:true, depthWrite:false, blending:THREE.AdditiveBlending }));
+  pts.frustumCulled = false; scene.add(pts);
+  bursts.push({ pts, vel, life:0, max:o.life || 1.2, grav:o.grav ?? 1.5 });
+}
+function updateBursts(dt) {
+  for (let i = bursts.length - 1; i >= 0; i--) {
+    const b = bursts[i]; b.life += dt;
+    const a = b.pts.geometry.attributes.position, dr = Math.pow(.96, dt * 60);
+    b.vel.forEach((v, j) => { v.y -= b.grav * dt; v.multiplyScalar(dr); a.array[j*3] += v.x*dt; a.array[j*3+1] += v.y*dt; a.array[j*3+2] += v.z*dt; });
+    a.needsUpdate = true;
+    b.pts.material.opacity = Math.max(0, 1 - Math.pow(b.life / b.max, 2));
+    if (b.life > b.max) { scene.remove(b.pts); b.pts.geometry.dispose(); b.pts.material.dispose(); bursts.splice(i, 1); }
+  }
+}
+
+/* =========================================================
+   STORY
+   intro → aim → charge → fly → after (everything keyed to hit time)
+   ========================================================= */
+const S = { phase:'idle', t:0, h:0, done:false };
+let charge = 0, pull = 0, snap = 0, flyT = 0, flyFrom = new THREE.Vector3(), flyTo = new THREE.Vector3(), flyQ = new THREE.Quaternion();
+const fired = new Set();
+const once = (k, fn) => { if (!fired.has(k)) { fired.add(k); fn(); } };
+const hint = txt => { const h = $('hint'); if (txt) { h.textContent = txt; h.classList.add('show'); } else h.classList.remove('show'); };
+
+function startStory() {
+  if (S.phase !== 'idle') return;
+  audioInit(); if (!RECORD) AC.resume();
+  $('start').classList.add('hide');
+  S.phase = 'intro'; S.t = 0;
+  padChord(PAD[0], 3.4); padIndex = 1; nextPadAt = 3;
+  bell(783.99, .2, .05, 1.6);
+}
+function beginCharge() {
+  if (S.phase !== 'aim') return;
+  S.phase = 'charge'; charge = 0; hint('');
+  SFX.creak(1.3);
+}
+function release() {
+  if (S.phase !== 'charge') return;
+  S.phase = 'fly'; flyT = 0;
+  $('power').classList.remove('show');
+  SFX.twang(); SFX.whoosh();
+  snap = pull; pull = 0;
+  scene.attach(arrow);                                   // keep its world position, leave the bow
+  flyFrom.copy(arrow.position); arrow.getWorldQuaternion(flyQ);
+  const dir = TMP.copy(HEART_POS).sub(flyFrom).normalize();
+  flyTo.copy(HEART_POS).addScaledVector(dir, .35 - ARROW_LEN);
+}
+function onHit() {
+  S.phase = 'after'; S.h = 0;
+  SFX.thunk(); SFX.sparkle(8, .05);
+  heart.attach(arrow);
+  burst(HEART_POS, 0xff9cc2, 90, 3.2, { size:.13, life:1.1 });
+}
+
+function writeLine(textEl, rect, penX, penY, dur, yMin, yMax) {
+  const ease = 'cubic-bezier(.45,.05,.55,.95)';
+  rect.animate([{ transform:'translateX(-1000px)' }, { transform:'translateX(0px)' }], { duration:dur, easing:ease, fill:'both' });
+  textEl.animate([{ strokeDashoffset:1600 }, { strokeDashoffset:0 }], { duration:dur * .95, easing:'ease-out', fill:'forwards' });
+  textEl.animate([{ fillOpacity:0 }, { fillOpacity:1 }], { duration:dur * .55, delay:dur * .45, easing:'ease-in', fill:'forwards' });
+  penX.animate([{ transform:'translateX(-40px)', opacity:0 }, { opacity:1, offset:.06 }, { opacity:1, offset:.94 }, { transform:'translateX(960px)', opacity:0 }], { duration:dur, easing:ease, fill:'forwards' });
+  const ys = []; for (let i = 0; i <= 14; i++) ys.push({ transform:`translateY(${i % 2 ? yMin : yMax}px)` });
+  penY.animate(ys, { duration:dur, easing:'ease-in-out', fill:'forwards' });
+  SFX.pen(dur / 1000);
+}
+
+$('line2').textContent = CONFIG.name;
+$('line3').textContent = CONFIG.subtitle;
+$('start').addEventListener('click', startStory);
+renderer.domElement.addEventListener('pointerdown', () => beginCharge());
+addEventListener('pointerup', () => { if (S.phase === 'charge' && charge > .08) release(); });
+$('again').onclick = () => location.reload();
+
+/* ---------------- resize ---------------- */
+function fit() {
+  camera.aspect = innerWidth / innerHeight;
+  camera.fov = camera.aspect < .8 ? 46 : 36;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+}
+addEventListener('resize', fit); fit();
+
+// camera: "A" frames heart + bow, "B" frames the cake
+function placeCamera(h, t) {
+  const k = S.phase === 'after' ? easeInOut(seg(h, 1.8, 4.2)) : 0;
+  camTarget.set(0, THREE.MathUtils.lerp(.5, -1.0, k), 0);
+  const R = THREE.MathUtils.lerp(14.5, 11.4, k), H = THREE.MathUtils.lerp(2.6, 3.3, k);
+  const az = S.phase === 'after' ? .26 * Math.sin(.32 * Math.max(0, h - 4)) * seg(h, 4, 6) : 0;
+  camera.position.set(camTarget.x + Math.sin(az) * R, camTarget.y + H + Math.sin(t * .6) * .05, camTarget.z + Math.cos(az) * R);
+  camera.lookAt(camTarget);
+}
+
+/* =========================================================
+   LOOP
+   ========================================================= */
+const clock = new THREE.Clock();
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), .05), t = clock.elapsedTime;
+  S.t += dt;
+  const s = S.t;
+
+  // background pad keeps playing until the song takes over
+  if (AC && !songOn && S.t >= nextPadAt && S.phase !== 'idle') { padChord(PAD[padIndex % PAD.length], 3.4); padIndex++; nextPadAt = S.t + 3; }
+
+  /* ----- heart + bow before the shot ----- */
+  if (S.phase !== 'after' && S.phase !== 'idle') {
+    heart.scale.setScalar(1.55 * elastic(seg(s, 0, 1.1)));
+    heart.position.y = HEART_POS.y + Math.sin(t * 1.8) * .06;
+    heart.rotation.y = Math.sin(t * 1.2) * .25;
+    bow.position.x = BOW_POS.x - 4 * (1 - easeOut(seg(s, .25, 1.1)));
+  }
+  if (S.phase === 'intro' && s > 1.1) {
+    S.phase = 'aim'; S.aimT = s;
+    hint(RECORD ? '' : 'Hold to pull the bow 💘');
+    $('power').classList.add('show');
+  }
+  if (S.phase === 'aim' || S.phase === 'charge' || S.phase === 'fly') {
+    bow.rotation.z = AIM * easeInOut(seg(s, S.aimT, S.aimT + .7));
+  }
+  if (S.phase === 'charge') {
+    charge = Math.min(1, charge + dt / 1.25);
+    pull = .55 * easeOut(charge);
+    if (charge >= 1) release();
+  }
+  $('powerFill').style.height = (S.phase === 'charge' ? charge * 100 : S.phase === 'fly' || S.phase === 'after' ? 0 : 0) + '%';
+  if ($('power').classList.contains('show')) {
+    TMP.copy(BOW_POS).project(camera);
+    const p = $('power');
+    p.style.left = ((TMP.x + 1) / 2 * innerWidth - Math.max(60, innerWidth * .11)) + 'px';
+    p.style.top = ((1 - TMP.y) / 2 * innerHeight - 75) + 'px';
+  }
+
+  // bow string (pulled, or wobbling after release)
+  if (snap > 0) snap = Math.max(0, snap - dt * .9);
+  const wob = snap > 0 ? -snap * Math.sin(t * 60) * .5 : 0;
+  nock.set(-.18 - pull + wob, 0, 0);
+  placeBetween(strA, TIP_T, nock); placeBetween(strB, nock, TIP_B);
+  bowBody.scale.x = 1 + pull * .12;
+  if (arrow.parent === bow) arrow.position.x = nock.x;
+
+  if (S.phase === 'fly') {
+    flyT += dt / .34;
+    const k = Math.min(1, flyT);
+    arrow.position.lerpVectors(flyFrom, flyTo, k * k * (3 - 2 * k) * .25 + k * .75);
+    arrow.quaternion.copy(flyQ);
+    if (Math.random() < .8) burst(arrow.position.clone(), 0xffd1e3, 3, .3, { size:.08, life:.4, grav:0 });
+    if (k >= 1) onHit();
+  }
+
+  /* ----- after the hit: everything keyed to h ----- */
+  if (S.phase === 'after') {
+    S.h += dt; const h = S.h;
+    // heart wobble, then spin, then vanish
+    const jig = 1 + .15 * Math.sin(seg(h, 0, .35) * Math.PI);
+    const vanish = 1 - easeIn(seg(h, 1.35, 1.6));
+    heart.scale.setScalar(Math.max(.0001, 1.55 * jig * vanish));
+    heart.rotation.y = Math.PI * 2 * 2.5 * easeIn(seg(h, .25, 1.45));
+    if (h > 1.35) once('pop', () => { SFX.shimmer(); burst(HEART_POS, 0xffd27f, 140, 4, { size:.14, life:1.4 }); burst(HEART_POS, 0xff9cc2, 90, 3, { size:.12, life:1.2 }); });
+    if (h > 1.62) { heart.visible = false; }
+    // bow leaves
+    const out = easeIn(seg(h, .2, .8));
+    bow.scale.setScalar(Math.max(.0001, 1 - out)); bow.position.x = BOW_POS.x - out * 1.5;
+    // background night → rose
+    const bk = easeInOut(seg(h, 1.4, 3.6));
+    scene.background.copy(BG_NIGHT).lerp(BG_ROSE, bk); scene.fog.color.copy(scene.background);
+    // golden plate appears where the heart was, flips flat, glides down
+    if (h > 1.4) {
+      plate.visible = true;
+      const ap = seg(h, 1.4, 1.95), fl = easeInOut(seg(h, 1.4, 2.5)), mv = easeInOut(seg(h, 2.2, 3.8));
+      plate.scale.setScalar(Math.max(.0001, backOut(ap)));
+      plate.rotation.x = .5 * (1 - fl);                   // arrives nearly edge-on, like a glowing gold ring
+      plate.rotation.y += dt * 1.2 * (1 - mv * .8);
+      plate.position.lerpVectors(HEART_POS, PLATE_POS, mv);
+      plateGlow.position.copy(plate.position).add(TMP.set(0, -.05, -.4));
+      plateGlow.material.opacity = .6 * seg(h, 1.4, 1.8) * (1 - .7 * seg(h, 3.9, 5)) + .25 * Math.exp(-Math.max(0, h - 3.8) * 3);
+      plateGlow.scale.set(5.5 * plate.scale.x, 1.5, 1);
+    }
+    if (h > 3.8) once('land', () => { bell(1046.5, 0, .06, 1.8); bell(1318.5, .05, .04, 1.8); burst(PLATE_POS, 0xffd27f, 80, 2.5, { size:.1, life:1 }); });
+    if (h > 2.4) once('rain', () => { rainOn = true; for (let i = 0; i < 25; i++) spawnRain(true); });
+    // cake tiers fall and bounce
+    TIERS.forEach((T, i) => {
+      if (h < T.at) return;
+      T.g.visible = true;
+      const f = seg(h, T.at, T.at + .55);
+      T.g.position.y = T.base + 6.5 * (1 - f * f);
+      if (f >= 1) {
+        once('tier' + i, () => { SFX.thud(T.note); burst(TMP.copy(PLATE_POS).setY(PLATE_POS.y + T.base + .1), 0xffffff, 50, 2, { size:.09, life:.8 }); });
+        const d = h - T.at - .55, w = Math.exp(-d * 8) * Math.cos(d * 24);
+        T.g.scale.set(1 + .07 * w, 1 - .13 * w, 1 + .07 * w);
+      }
+    });
+    if (h > 6.3) {
+      topper.visible = true;
+      const f = seg(h, 6.3, 6.75);
+      topper.position.y = CAKE_TOP + .32 + 4 * (1 - f * f) + (f >= 1 ? .08 * Math.abs(Math.sin((h - 6.75) * 9)) * Math.exp(-(h - 6.75) * 4) : 0);
+      topper.rotation.y = h * 1.1;
+      if (f >= 1) once('topper', () => bell(1046.5, 0, .07, 1.4));
+    }
+    candles.forEach(c => {
+      if (h < c.at) return;
+      c.g.visible = true;
+      c.g.scale.y =Math.max(.0001, backOut(seg(h, c.at, c.at + .3)));
+      if (h > c.at + .3 && !c.lit) { c.lit = true; SFX.fwip(); }
+      const k = c.lit ? easeOut(seg(h, c.at + .3, c.at + .6)) : 0, fl = 1 + Math.sin(t * 17 + c.seed) * .08;
+      c.flame.scale.set(Math.max(.0001, .16 * k * (2 - fl)), Math.max(.0001, .32 * k * fl), 1);
+      c.glow.material.opacity = .5 * k * fl; c.light.intensity = .7 * k * fl;
+    });
+    if (h > 7.4) once('balloons', () => { balloonsOn = true; balloons.forEach(b => spawnBalloon(b, true)); });
+    if (h > 7.6) once('song', playSong);
+    // handwriting
+    if (h > 8.0) once('blur', () => renderer.domElement.animate([{ filter:'blur(0px) brightness(1)' }, { filter:'blur(2.5px) brightness(.78)' }], { duration:1600, easing:'ease-in-out', fill:'forwards' }));
+    if (h > 8.1) once('w1', () => writeLine($('line1'), $('rev1'), $('penX1'), $('penY1'), 2800, -55, 45));
+    if (h > 11.2) once('w2', () => writeLine($('line2'), $('rev2'), $('penX2'), $('penY2'), 1900, -80, 60));
+    if (h > 13.2) once('glow', () => {
+      SFX.sparkle(12);
+      $('write').animate([
+        { filter:'drop-shadow(0 0 9px rgba(255,196,96,.55)) drop-shadow(0 2px 3px rgba(40,0,20,.7))' },
+        { filter:'drop-shadow(0 0 26px rgba(255,214,140,.95)) drop-shadow(0 2px 3px rgba(40,0,20,.7))' },
+        { filter:'drop-shadow(0 0 12px rgba(255,196,96,.7)) drop-shadow(0 2px 3px rgba(40,0,20,.7))' }], { duration:1600, easing:'ease-in-out', fill:'forwards' });
+    });
+    if (h > 13.6) once('sub', () => $('line3').animate([{ opacity:0, transform:'translateY(14px)' }, { opacity:1, transform:'translateY(0px)' }], { duration:1200, easing:'ease-out', fill:'forwards' }));
+    if (h > 16 && !RECORD) once('again', () => { $('again').style.display = 'block'; });
+    if (h > 21) S.done = true;
+  }
+
+  // balloons drift up and loop
+  balloons.forEach(b => {
+    if (!b.visible) return;
+    b.position.y += b.userData.v * dt;
+    b.position.x += Math.sin(t * .9 + b.userData.ph) * dt * .25;
+    b.rotation.z = Math.sin(t * 1.2 + b.userData.ph) * .1;
+    if (b.position.y > camTarget.y + 7 && balloonsOn) spawnBalloon(b, false);
+  });
+
+  dust.rotation.y = t * .015;
+  dust.material.opacity = .45 + Math.sin(t * 1.7) * .15;
+
+  placeCamera(S.h, t);
+  updateRain(dt, t);
+  updateBursts(dt);
+  renderer.render(scene, camera);
+}
+animate();
+if (RECORD) $('start').style.display = 'none';
+</script>
+</body>
+</html>
