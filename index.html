@@ -142,10 +142,14 @@ const TMP = new THREE.Vector3();
 /* =========================================================
    SOUND — everything is synthesized, no files needed
    ========================================================= */
+// window.__RECORD is only set by the video recorder: time is stepped frame by frame
+// and all sound is rendered offline so it can be saved into the video file.
+const RECORD = !!window.__RECORD;
 let AC, master, bus, noiseBuf, muted = false, musicEl;
 function audioInit() {
   if (AC) return;
-  AC = new (window.AudioContext || window.webkitAudioContext)();
+  AC = RECORD ? new OfflineAudioContext(2, 44100 * window.__RECORD.seconds, 44100)
+              : new (window.AudioContext || window.webkitAudioContext)();
   master = AC.createGain(); master.gain.value = 0.85; master.connect(AC.destination);
   bus = AC.createGain(); bus.connect(master);
   // little hall reverb so everything sounds dreamy
@@ -157,7 +161,7 @@ function audioInit() {
   noiseBuf = AC.createBuffer(1, AC.sampleRate * 2, AC.sampleRate);
   const nd = noiseBuf.getChannelData(0); for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
 }
-const now = () => AC.currentTime;
+const now = () => RECORD ? performance.now() / 1000 : AC.currentTime;
 function tone(t, f, dur, o = {}) {
   const osc = AC.createOscillator(), g = AC.createGain();
   osc.type = o.type || 'sine'; osc.frequency.setValueAtTime(f, t);
@@ -238,7 +242,7 @@ $('mute').onclick = () => {
 /* =========================================================
    THREE.JS SCENE
    ========================================================= */
-const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
+const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true, preserveDrawingBuffer:RECORD });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
 renderer.outputEncoding = THREE.sRGBEncoding;
@@ -744,6 +748,7 @@ function updateSky(dt, t) {
    ========================================================= */
 let analyser, micData, micStream, blowFrames = 0;
 async function startMic() {
+  if (RECORD) return false;
   if (micStream) return true;
   try {
     micStream = await navigator.mediaDevices.getUserMedia({ audio:{ echoCancellation:true, noiseSuppression:false } });
@@ -790,7 +795,7 @@ function spell(el, text, delay) {
 }
 
 $('openBtn').addEventListener('click', async () => {
-  audioInit(); AC.resume();
+  audioInit(); if (!RECORD) AC.resume();
   $('intro').classList.add('hide');
   $('mute').style.display = 'block';
   SFX.heartbeat(); SFX.whoosh();
@@ -883,15 +888,18 @@ renderer.domElement.addEventListener('pointerup', e => {
   const hit = raycaster.intersectObjects(balloons.filter(b => b.visible), true)[0];
   if (hit) {
     let b = hit.object; while (!balloons.includes(b)) b = b.parent;
-    b.visible = false;
-    SFX.balloon();
-    burst(b.position.clone(), b.userData.color, sphereVels(70, 4), { size:.22, life:1.1, gravity:5 });
-    setTimeout(() => { if (S.phase === 'party') spawnBalloon(b, false); }, 2500);
+    popBalloon(b);
     return;
   }
   if (S.phase === 'gift') openGift();
   else if (S.phase === 'wish') blowOut();
 });
+function popBalloon(b) {
+  b.visible = false;
+  SFX.balloon();
+  burst(b.position.clone(), b.userData.color, sphereVels(70, 4), { size:.22, life:1.1, gravity:5 });
+  setTimeout(() => { if (S.phase === 'party') spawnBalloon(b, false); }, 2500);
+}
 
 /* ---------------- Resize ---------------- */
 function fit() {
@@ -969,7 +977,7 @@ function animate() {
     case 'song':
       if (performance.now() > songEndsAt - 300) {
         setPhase('wish');
-        hint(micOK ? '🌠 Make a wish… then blow into the mic (or tap the cake)' : '🌠 Make a wish… then tap the cake to blow the candles');
+        hint(RECORD ? '🌠 Make a wish…' : micOK ? '🌠 Make a wish… then blow into the mic (or tap the cake)' : '🌠 Make a wish… then tap the cake to blow the candles');
       }
       break;
     case 'wish':
