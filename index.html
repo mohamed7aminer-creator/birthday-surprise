@@ -6,15 +6,15 @@
 <title>Happy Birthday Fatima</title>
 <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&family=Poppins:wght@300;500;600&display=swap" rel="stylesheet">
 <style>
-  :root { --pink:#ff7eb3; --rose:#ff4f9a; --gold:#ffd27f; }
+  :root { --pink:#cab70c; --rose:#1d7a25; --gold:#ffd27f; }
   * { box-sizing: border-box; }
   html, body { margin:0; height:100%; overflow:hidden; }
   body {
     background: radial-gradient(ellipse at 50% 30%, #420d47 0%, #170722 55%, #07020c 100%);
-    font-family: 'Poppins', sans-serif; color:#fff;
-    -webkit-tap-highlight-color: transparent;
+    font-family: 'Poppins', sans-serif; color:#b32323;
+    -webkit-tap-highlight-color: transparent; user-select:none;
   }
-  canvas { display:block; }
+  canvas { display:block; touch-action:none; }
 
   /* ---------- Intro ---------- */
   #intro {
@@ -39,8 +39,16 @@
   }
   .btn:hover { transform: translateY(-2px) scale(1.04); box-shadow:0 12px 40px #ff4f9aaa; }
 
+  /* ---------- Mute ---------- */
+  #mute {
+    position:fixed; top:14px; right:14px; z-index:16; width:44px; height:44px; border-radius:50%;
+    border:1px solid rgba(255,255,255,.25); background:rgba(255,255,255,.1); color:#fff; font-size:20px;
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); cursor:pointer; display:none;
+  }
+
   /* ---------- Title ---------- */
-  #title { position:fixed; top:4vh; left:0; width:100%; text-align:center; pointer-events:none; z-index:5; padding:0 16px; }
+  #title { position:fixed; top:4vh; left:0; width:100%; text-align:center; pointer-events:none; z-index:5; padding:0 16px; transition: opacity 1.2s; }
+  #title.fade { opacity:0; }
   #title h1, #title h2 { margin:0; font-family:'Great Vibes', cursive; font-weight:400; line-height:1.1; }
   #title h1 { font-size:clamp(44px,10vw,100px); color:#ffe3f0; text-shadow:0 0 18px #ff4f9a, 0 0 40px #ff4f9a99; }
   #title h2 { font-size:clamp(38px,8vw,80px); color:var(--gold); text-shadow:0 0 18px #ffb347, 0 0 40px #ffb34799; }
@@ -64,7 +72,7 @@
     width:min(460px, calc(100% - 32px)); max-height:calc(100% - 32px); overflow:auto;
     transform: translate(-50%,-40%) scale(.9); opacity:0; visibility:hidden;
     transition: all .9s cubic-bezier(.2,1.2,.4,1);
-    background: linear-gradient(160deg, rgba(255,255,255,.16), rgba(255,255,255,.05));
+    background: linear-gradient(160deg, rgba(40,10,50,.82), rgba(20,5,30,.9));
     backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
     border:1px solid rgba(255,255,255,.25); border-radius:24px;
     padding:30px 26px 24px; text-align:center;
@@ -91,7 +99,8 @@
   <p style="font-size:13px;opacity:.55">turn your sound on 🔊</p>
 </div>
 
-<div id="title"><h1 id="t1"></h1><h2 id="t2"></h2></div>
+<button id="mute" aria-label="Mute">🔊</button>
+<div id="title" class="fade"><h1 id="t1"></h1><h2 id="t2"></h2></div>
 <div id="hint"></div>
 
 <div id="card">
@@ -119,13 +128,116 @@ and today I get to celebrate YOU.
 I love you more than all the stars in this sky ✨`,
   from: "Forever yours ❤️",
   photo: "",                       // e.g. "us.jpg"  (put the picture in this same folder)
-  music: "",                       // e.g. "song.mp3" (leave empty = built-in Happy Birthday melody)
+  music: "",                       // e.g. "song.mp3" (leave empty = built-in music-box melody)
 };
 /* ========================================================= */
 
 const $ = id => document.getElementById(id);
+const rand = (a, b) => a + Math.random() * (b - a);
+const clamp01 = x => Math.min(1, Math.max(0, x));
+const ease = x => 1 - Math.pow(1 - x, 3);
+const elastic = x => x <= 0 ? 0 : x >= 1 ? 1 : Math.pow(2, -10 * x) * Math.sin((x * 10 - 0.75) * (2 * Math.PI / 3)) + 1;
+const TMP = new THREE.Vector3();
 
-/* ---------------- Three.js setup ---------------- */
+/* =========================================================
+   SOUND — everything is synthesized, no files needed
+   ========================================================= */
+let AC, master, bus, noiseBuf, muted = false, musicEl;
+function audioInit() {
+  if (AC) return;
+  AC = new (window.AudioContext || window.webkitAudioContext)();
+  master = AC.createGain(); master.gain.value = 0.85; master.connect(AC.destination);
+  bus = AC.createGain(); bus.connect(master);
+  // little hall reverb so everything sounds dreamy
+  const rev = AC.createConvolver(), len = AC.sampleRate * 2.6, ir = AC.createBuffer(2, len, AC.sampleRate);
+  for (let ch = 0; ch < 2; ch++) { const d = ir.getChannelData(ch); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3); }
+  rev.buffer = ir;
+  const wet = AC.createGain(); wet.gain.value = 0.3;
+  bus.connect(rev); rev.connect(wet); wet.connect(master);
+  noiseBuf = AC.createBuffer(1, AC.sampleRate * 2, AC.sampleRate);
+  const nd = noiseBuf.getChannelData(0); for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+}
+const now = () => AC.currentTime;
+function tone(t, f, dur, o = {}) {
+  const osc = AC.createOscillator(), g = AC.createGain();
+  osc.type = o.type || 'sine'; osc.frequency.setValueAtTime(f, t);
+  if (o.f2) osc.frequency.exponentialRampToValueAtTime(o.f2, t + (o.glide || dur));
+  const a = o.attack ?? 0.005, v = o.vol ?? 0.1;
+  g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(v, t + a); g.gain.exponentialRampToValueAtTime(0.0001, t + a + dur);
+  let node = osc;
+  if (o.lp) { const fl = AC.createBiquadFilter(); fl.type = 'lowpass'; fl.frequency.value = o.lp; osc.connect(fl); node = fl; }
+  node.connect(g).connect(bus); osc.start(t); osc.stop(t + a + dur + 0.05);
+}
+function noise(t, dur, o = {}) {
+  const src = AC.createBufferSource(); src.buffer = noiseBuf; src.loop = true;
+  const fl = AC.createBiquadFilter(); fl.type = o.type || 'bandpass';
+  fl.frequency.setValueAtTime(o.f || 1000, t); if (o.f2) fl.frequency.exponentialRampToValueAtTime(o.f2, t + dur); fl.Q.value = o.q ?? 1;
+  const g = AC.createGain(), a = o.attack ?? 0.005, v = o.vol ?? 0.2;
+  g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(v, t + a); g.gain.exponentialRampToValueAtTime(0.0001, t + a + dur);
+  src.connect(fl).connect(g).connect(bus); src.start(t, Math.random()); src.stop(t + a + dur + 0.05);
+}
+const SFX = {
+  whoosh()  { noise(now(), 1.4, { f:250, f2:2200, q:1.2, vol:.25, attack:.5 }); },
+  tink(f, d = 0, v = .07) { const t = now() + d; tone(t, f, .6, { vol:v }); tone(t, f * 2.76, .25, { vol:v * .35 }); },
+  sparkle(n = 10, d = 0) { for (let i = 0; i < n; i++) SFX.tink(rand(1800, 4200), d + i * .045, .035); },
+  popper()  { const t = now(); noise(t, .18, { type:'highpass', f:1200, vol:.5, attack:.002 }); tone(t, 180, .25, { f2:45, vol:.45 }); SFX.sparkle(14, .08); },
+  magic()   { [523.25, 659.25, 783.99, 1046.5, 1318.5, 1568].forEach((f, i) => SFX.tink(f, i * .08, .08)); tone(now(), 300, 1.4, { f2:1200, vol:.04, attack:.4, type:'triangle' }); },
+  fwip()    { noise(now(), .3, { f:500, f2:3500, q:2, vol:.22, attack:.03 }); SFX.tink(rand(1200, 1600), .05, .03); },
+  wind()    { noise(now(), 1.5, { type:'lowpass', f:400, f2:1400, vol:.55, attack:.2 }); },
+  whistle(dur) { const t = now(); tone(t, 600, dur, { f2:1900, glide:dur, vol:.025, attack:.05 }); noise(t, dur, { f:3000, f2:5000, q:4, vol:.025, attack:.05 }); },
+  boom(v = 1) {
+    const t = now();
+    noise(t, 1.6, { type:'lowpass', f:500, f2:60, vol:.4 * v, attack:.003 });
+    tone(t, 90, .9, { f2:30, vol:.45 * v });
+    for (let i = 0; i < 22; i++) noise(t + .35 + Math.random() * 1.1, .03, { type:'highpass', f:4000, vol:(.02 + Math.random() * .1) * v, attack:.001 });
+  },
+  balloon() { const t = now(); noise(t, .09, { type:'highpass', f:900, vol:.8, attack:.001 }); tone(t, 500, .12, { f2:70, vol:.3 }); },
+  heartbeat() { const t = now(); tone(t, 70, .18, { f2:40, vol:.6 }); tone(t + .22, 65, .2, { f2:38, vol:.5 }); },
+};
+
+const NOTE = { G2:98, B2:123.47, C3:130.81, D3:146.83, E3:164.81, F3:174.61, G3:196, A3:220, C4:261.63,
+  G4:392, A4:440, B4:493.88, C5:523.25, D5:587.33, E5:659.25, F5:698.46, G5:783.99 };
+const MELODY = [
+  ['G4',.75],['G4',.25],['A4',1],['G4',1],['C5',1],['B4',2],
+  ['G4',.75],['G4',.25],['A4',1],['G4',1],['D5',1],['C5',2],
+  ['G4',.75],['G4',.25],['G5',1],['E5',1],['C5',1],['B4',1],['A4',2],
+  ['F5',.75],['F5',.25],['E5',1],['C5',1],['D5',1],['C5',3],
+];
+const CHORD = { C:['C3','E3','G3'], G:['G2','B2','D3'], F:['F3','A3','C4'] };
+const PROG = [['C',3],['G',3],['G',3],['C',3],['C',3],['F',3],['C',3],['G',1],['C',4]];
+let songEndsAt = 0;
+function playSong(vol = 1) {
+  if (CONFIG.music) {
+    if (!musicEl) { musicEl = new Audio(CONFIG.music); musicEl.loop = true; }
+    musicEl.muted = muted; musicEl.currentTime = 0; musicEl.play().catch(() => {});
+    songEndsAt = performance.now() + 6000;
+    return;
+  }
+  const beat = .45, t0 = now() + .3; let t = t0;
+  // music-box melody
+  MELODY.forEach(([n, d]) => {
+    const f = NOTE[n];
+    tone(t, f, d * beat + .8, { vol:.13 * vol });
+    tone(t, f * 2, .5, { vol:.035 * vol });
+    tone(t, f * 4.02, .18, { vol:.02 * vol });
+    t += d * beat;
+  });
+  // soft pad chords underneath
+  let ct = t0 + beat;
+  PROG.forEach(([c, d]) => { CHORD[c].forEach(n => tone(ct, NOTE[n], d * beat, { type:'sawtooth', lp:900, vol:.016 * vol, attack:.25 })); ct += d * beat; });
+  songEndsAt = performance.now() + (t - now()) * 1000;
+}
+
+$('mute').onclick = () => {
+  muted = !muted;
+  $('mute').textContent = muted ? '🔇' : '🔊';
+  if (master) master.gain.value = muted ? 0 : 0.85;
+  if (musicEl) musicEl.muted = muted;
+};
+
+/* =========================================================
+   THREE.JS SCENE
+   ========================================================= */
 const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.setSize(innerWidth, innerHeight);
@@ -135,9 +247,9 @@ renderer.toneMappingExposure = 1.1;
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2(0x1a0726, 0.022);
+scene.fog = new THREE.FogExp2(0x1a0726, 0.03);
 
-const camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.1, 200);
+const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 200);
 const CAM_START = new THREE.Vector3(0, 10, 24);
 const CAM_END = new THREE.Vector3(0, 4.8, 10.5);
 camera.position.copy(CAM_START);
@@ -146,25 +258,20 @@ const controls = new THREE.OrbitControls(camera, renderer.domElement);
 controls.target.set(0, 2.4, 0);
 controls.enableDamping = true;
 controls.enablePan = false;
-controls.minDistance = 6; controls.maxDistance = 20;
+controls.minDistance = 6; controls.maxDistance = 22;
 controls.maxPolarAngle = Math.PI * 0.55;
-controls.autoRotateSpeed = 0.8;
+controls.autoRotateSpeed = 0.7;
 controls.enabled = false;
+camera.lookAt(controls.target);
 
 /* ---------------- Lights ---------------- */
-const ambient = new THREE.AmbientLight(0xffd6e8, 0.35);
-scene.add(ambient);
+const ambient = new THREE.AmbientLight(0xffd6e8, 0.35); scene.add(ambient);
 scene.add(new THREE.HemisphereLight(0xff9ecb, 0x2a0a35, 0.45));
-const key = new THREE.DirectionalLight(0xffe6f0, 0.7);
-key.position.set(5, 10, 7); scene.add(key);
-const rim = new THREE.DirectionalLight(0xb38cff, 0.5);
-rim.position.set(-6, 5, -8); scene.add(rim);
+const key = new THREE.DirectionalLight(0xffe6f0, 0.7); key.position.set(5, 10, 7); scene.add(key);
+const rim = new THREE.DirectionalLight(0xb38cff, 0.5); rim.position.set(-6, 5, -8); scene.add(rim);
+const partyLights = [0xff4f9a, 0xffc04d, 0x7a8cff].map(c => { const l = new THREE.PointLight(c, 0, 14); scene.add(l); return l; });
 
-const partyLights = [0xff4f9a, 0xffc04d, 0x7a8cff].map(c => {
-  const l = new THREE.PointLight(c, 0, 14); scene.add(l); return l;
-});
-
-/* ---------------- Helpers / textures ---------------- */
+/* ---------------- Textures ---------------- */
 function canvasTex(w, h, draw) {
   const c = document.createElement('canvas'); c.width = w; c.height = h;
   draw(c.getContext('2d'), w, h);
@@ -176,10 +283,10 @@ const dotTex = canvasTex(64, 64, (g, w) => {
   g.fillStyle = gr; g.fillRect(0, 0, w, w);
 });
 const flameTex = canvasTex(64, 128, (g, w, h) => {
-  const gr = g.createRadialGradient(w/2, h*0.68, 2, w/2, h*0.6, w/2);
+  const gr = g.createRadialGradient(w/2, h*.68, 2, w/2, h*.6, w/2);
   gr.addColorStop(0, 'rgba(255,255,240,1)'); gr.addColorStop(.25, 'rgba(255,230,120,.95)');
   gr.addColorStop(.6, 'rgba(255,140,40,.6)'); gr.addColorStop(1, 'rgba(255,60,0,0)');
-  g.fillStyle = gr; g.beginPath(); g.ellipse(w/2, h*0.6, w/2, h*0.42, 0, 0, Math.PI*2); g.fill();
+  g.fillStyle = gr; g.beginPath(); g.ellipse(w/2, h*.6, w/2, h*.42, 0, 0, Math.PI*2); g.fill();
 });
 const stripeTex = canvasTex(64, 64, (g, w) => {
   g.fillStyle = '#fff6fb'; g.fillRect(0, 0, w, w);
@@ -187,8 +294,12 @@ const stripeTex = canvasTex(64, 64, (g, w) => {
   for (let i = -w; i < w*2; i += 22) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i + w, w); g.stroke(); }
 });
 stripeTex.wrapS = stripeTex.wrapT = THREE.RepeatWrapping; stripeTex.repeat.set(1, 2);
+const streakTex = canvasTex(256, 8, (g, w, h) => {
+  const gr = g.createLinearGradient(0, 0, w, 0);
+  gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(.85, 'rgba(255,230,250,.8)'); gr.addColorStop(1, 'rgba(255,255,255,1)');
+  g.fillStyle = gr; g.fillRect(0, 0, w, h);
+});
 
-const rand = (a, b) => a + Math.random() * (b - a);
 const std = (color, o = {}) => new THREE.MeshStandardMaterial(Object.assign({ color, roughness:.55, metalness:.05 }, o));
 
 function heartGeometry(depth = 0.25) {
@@ -207,98 +318,124 @@ function heartGeometry(depth = 0.25) {
 const HEART = heartGeometry();
 
 /* ---------------- Floor ---------------- */
-const floor = new THREE.Mesh(new THREE.CircleGeometry(30, 64), std(0x2a0d36, { roughness:.35, metalness:.3 }));
+const floor = new THREE.Mesh(new THREE.CircleGeometry(90, 64), std(0x14061c, { roughness:.85, metalness:0 }));
 floor.rotation.x = -Math.PI/2; scene.add(floor);
 
-/* ---------------- Cake ---------------- */
-const cake = new THREE.Group(); scene.add(cake);
+/* =========================================================
+   GIFT BOX
+   ========================================================= */
+const gift = new THREE.Group(); scene.add(gift);
+const GW = 2.6, GH = 2.2;
+const boxMat = std(0xe91e63, { roughness:.35, metalness:.15 });
+const ribbonMat = std(0xffd27f, { roughness:.25, metalness:.6 });
+const giftBase = new THREE.Group(); gift.add(giftBase);
+const giftBottom = new THREE.Mesh(new THREE.BoxGeometry(GW, .08, GW), boxMat);
+giftBottom.position.y = .04; giftBase.add(giftBottom);
+const giftSides = [];
+// [x side, z side, rotation axis, direction that falls outward]
+[[0, 1, 'x', 1], [0, -1, 'x', -1], [1, 0, 'z', -1], [-1, 0, 'z', 1]].forEach(([sx, sz, axis, sign]) => {
+  const pivot = new THREE.Group(); pivot.position.set(sx * GW/2, 0, sz * GW/2);
+  const wall = new THREE.Mesh(sx ? new THREE.BoxGeometry(.08, GH, GW) : new THREE.BoxGeometry(GW, GH, .08), boxMat);
+  wall.position.y = GH/2; pivot.add(wall);
+  const rib = new THREE.Mesh(sx ? new THREE.BoxGeometry(.1, GH, .4) : new THREE.BoxGeometry(.4, GH, .1), ribbonMat);
+  rib.position.set(sx * .02, GH/2, sz * .02); pivot.add(rib);
+  pivot.userData = { axis, sign };
+  giftBase.add(pivot); giftSides.push(pivot);
+});
+const lid = new THREE.Group(); lid.position.y = GH; gift.add(lid);
+(() => {
+  const box = new THREE.Mesh(new THREE.BoxGeometry(GW + .2, .4, GW + .2), boxMat); box.position.y = .2; lid.add(box);
+  const r1 = new THREE.Mesh(new THREE.BoxGeometry(GW + .24, .42, .42), ribbonMat); r1.position.y = .2; lid.add(r1);
+  const r2 = new THREE.Mesh(new THREE.BoxGeometry(.42, .42, GW + .24), ribbonMat); r2.position.y = .2; lid.add(r2);
+  [-1, 1].forEach(s => {
+    const loop = new THREE.Mesh(new THREE.TorusGeometry(.38, .11, 14, 36), ribbonMat);
+    loop.position.set(s * .36, .72, 0); loop.rotation.z = s * .5; loop.scale.set(1, .75, 1); lid.add(loop);
+    const tail = new THREE.Mesh(new THREE.BoxGeometry(.18, .04, .7), ribbonMat);
+    tail.position.set(s * .2, .44, .35); tail.rotation.y = s * .4; lid.add(tail);
+  });
+  const knot = new THREE.Mesh(new THREE.SphereGeometry(.17, 16, 12), ribbonMat); knot.position.y = .5; lid.add(knot);
+})();
+const lidV = new THREE.Vector3();
 
-const plate = new THREE.Mesh(new THREE.CylinderGeometry(3.2, 3.0, 0.15, 64), std(0xf4f1f8, { roughness:.2, metalness:.6 }));
-plate.position.y = 0.075; cake.add(plate);
+/* =========================================================
+   CAKE
+   ========================================================= */
+const cake = new THREE.Group(); scene.add(cake);
+cake.scale.setScalar(0.0001);
+
+const plate = new THREE.Mesh(new THREE.CylinderGeometry(3.2, 3.0, .15, 64), std(0xf4f1f8, { roughness:.2, metalness:.6 }));
+plate.position.y = .075; cake.add(plate);
 
 function tier(radius, height, baseY, color, creamColor, dripColor) {
   const body = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, height, 64), std(color, { roughness:.7 }));
   body.position.y = baseY + height/2; cake.add(body);
   const top = baseY + height;
-
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(radius - 0.02, 0.13, 16, 80), std(creamColor, { roughness:.4 }));
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(radius - .02, .13, 16, 80), std(creamColor, { roughness:.4 }));
   ring.rotation.x = Math.PI/2; ring.position.y = top; cake.add(ring);
-
   const dripMat = std(dripColor, { roughness:.25, metalness:.1 });
   const n = Math.round(radius * 11);
   for (let i = 0; i < n; i++) {
-    const a = (i / n) * Math.PI * 2 + rand(-.05, .05);
-    const len = rand(0.18, height * 0.45);
-    const r = radius + 0.03;
-    const d = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, len, 10), dripMat);
+    const a = (i / n) * Math.PI * 2 + rand(-.05, .05), len = rand(.18, height * .45), r = radius + .03;
+    const d = new THREE.Mesh(new THREE.CylinderGeometry(.075, .075, len, 10), dripMat);
     d.position.set(Math.cos(a)*r, top - len/2, Math.sin(a)*r); cake.add(d);
-    const b = new THREE.Mesh(new THREE.SphereGeometry(0.08, 12, 10), dripMat);
+    const b = new THREE.Mesh(new THREE.SphereGeometry(.08, 12, 10), dripMat);
     b.position.set(Math.cos(a)*r, top - len, Math.sin(a)*r); cake.add(b);
   }
   const pearlMat = std(0xffffff, { roughness:.15, metalness:.4 });
   const m = Math.round(radius * 16);
   for (let i = 0; i < m; i++) {
     const a = (i / m) * Math.PI * 2;
-    const p = new THREE.Mesh(new THREE.SphereGeometry(0.09, 12, 10), pearlMat);
-    p.position.set(Math.cos(a)*(radius+0.04), baseY + 0.09, Math.sin(a)*(radius+0.04)); cake.add(p);
+    const p = new THREE.Mesh(new THREE.SphereGeometry(.09, 12, 10), pearlMat);
+    p.position.set(Math.cos(a)*(radius+.04), baseY + .09, Math.sin(a)*(radius+.04)); cake.add(p);
   }
   return top;
 }
-const t1 = tier(2.4, 1.4, 0.15, 0xf7a1c4, 0xfff4f8, 0xfff4f8);
+const t1 = tier(2.4, 1.4, .15, 0xf7a1c4, 0xfff4f8, 0xfff4f8);
 const t2 = tier(1.7, 1.1, t1, 0xfff0f5, 0xff8fbe, 0xff8fbe);
-const t3 = tier(1.1, 0.9, t2, 0xf7a1c4, 0xfff4f8, 0xc2185b);
+const t3 = tier(1.1, .9, t2, 0xf7a1c4, 0xfff4f8, 0xc2185b);
 
-// strawberries + cream on the ledges
 function ledge(radius, y, count) {
   for (let i = 0; i < count; i++) {
-    const a = (i / count) * Math.PI * 2;
-    const berry = i % 2 === 0;
-    const m = new THREE.Mesh(new THREE.SphereGeometry(berry ? 0.14 : 0.12, 16, 12),
+    const a = (i / count) * Math.PI * 2, berry = i % 2 === 0;
+    const m = new THREE.Mesh(new THREE.SphereGeometry(berry ? .14 : .12, 16, 12),
       berry ? std(0xe0203f, { roughness:.3 }) : std(0xffffff, { roughness:.5 }));
-    m.scale.y = berry ? 1.25 : 0.8;
-    m.position.set(Math.cos(a)*radius, y + 0.12, Math.sin(a)*radius); cake.add(m);
+    m.scale.y = berry ? 1.25 : .8;
+    m.position.set(Math.cos(a)*radius, y + .12, Math.sin(a)*radius); cake.add(m);
   }
 }
 ledge(2.05, t1, 20); ledge(1.4, t2, 14);
 
-// heart topper
 const topper = new THREE.Mesh(HEART, std(0xff2e63, { roughness:.25, metalness:.3, emissive:0x550015 }));
-topper.scale.setScalar(0.45);
-topper.position.set(0, t3 + 0.45, 0);
-cake.add(topper);
+topper.scale.setScalar(.45); topper.position.set(0, t3 + .45, 0); cake.add(topper);
 
 /* ---------------- Candles ---------------- */
 const candles = [];
-(function makeCandles() {
-  const N = Math.max(1, CONFIG.candles);
-  const H = 0.7;
+(() => {
+  const N = Math.max(1, CONFIG.candles), H = .7;
   for (let i = 0; i < N; i++) {
-    const a = (i / N) * Math.PI * 2 + Math.PI/2;
-    const r = N === 1 ? 0 : 0.72;
+    const a = (i / N) * Math.PI * 2 + Math.PI/2, r = N === 1 ? 0 : .72;
     const x = Math.cos(a) * r, z = Math.sin(a) * r;
-    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, H, 16),
-      new THREE.MeshStandardMaterial({ map:stripeTex, roughness:.5 }));
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(.07, .07, H, 16), new THREE.MeshStandardMaterial({ map:stripeTex, roughness:.5 }));
     body.position.set(x, t3 + H/2, z); cake.add(body);
-    const wick = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.1, 6), std(0x222222));
-    wick.position.set(x, t3 + H + 0.05, z); cake.add(wick);
-
+    const wick = new THREE.Mesh(new THREE.CylinderGeometry(.012, .012, .1, 6), std(0x222222));
+    wick.position.set(x, t3 + H + .05, z); cake.add(wick);
     const flame = new THREE.Sprite(new THREE.SpriteMaterial({ map:flameTex, blending:THREE.AdditiveBlending, depthWrite:false, transparent:true }));
-    flame.scale.set(0.2, 0.4, 1);
-    flame.position.set(x, t3 + H + 0.2, z); cake.add(flame);
-    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map:dotTex, color:0xffa040, blending:THREE.AdditiveBlending, depthWrite:false, transparent:true, opacity:.45 }));
-    glow.scale.set(0.9, 0.9, 1); glow.position.copy(flame.position); cake.add(glow);
-
-    const light = new THREE.PointLight(0xffa64d, 0.9, 6, 2);
+    flame.position.set(x, t3 + H + .2, z); flame.scale.set(.0001, .0001, 1); cake.add(flame);
+    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map:dotTex, color:0xffa040, blending:THREE.AdditiveBlending, depthWrite:false, transparent:true, opacity:0 }));
+    glow.scale.set(.9, .9, 1); glow.position.copy(flame.position); cake.add(glow);
+    const light = new THREE.PointLight(0xffa64d, 0, 6, 2);
     light.position.copy(flame.position); cake.add(light);
-    candles.push({ flame, glow, light, seed: Math.random() * 100, lit: true, k: 1 });
+    candles.push({ flame, glow, light, seed:Math.random() * 100, lit:false, k:0 });
   }
 })();
 
-/* ---------------- Stars ---------------- */
+/* =========================================================
+   SKY: stars, shooting stars, floating hearts
+   ========================================================= */
 const stars = (() => {
   const n = 1400, pos = new Float32Array(n * 3);
   for (let i = 0; i < n; i++) {
-    const r = rand(45, 90), th = rand(0, Math.PI*2), ph = Math.acos(rand(-0.2, 1));
+    const r = rand(45, 90), th = rand(0, Math.PI*2), ph = Math.acos(rand(-.2, 1));
     pos[i*3] = r*Math.sin(ph)*Math.cos(th); pos[i*3+1] = r*Math.cos(ph); pos[i*3+2] = r*Math.sin(ph)*Math.sin(th);
   }
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
@@ -306,44 +443,57 @@ const stars = (() => {
   scene.add(p); return p;
 })();
 
-/* ---------------- Floating hearts ---------------- */
+const shooting = [];
+function shootingStar(big) {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(big ? 9 : 4, big ? .16 : .07),
+    new THREE.MeshBasicMaterial({ map:streakTex, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false, fog:false, opacity:0 }));
+  const fwd = TMP.subVectors(controls.target, camera.position).setY(0).normalize();
+  const right = new THREE.Vector3(-fwd.z, 0, fwd.x);
+  const c = controls.target.clone().addScaledVector(fwd, big ? 25 : rand(30, 45)).addScaledVector(right, big ? -14 : rand(-30, 0));
+  c.y = big ? 16 : rand(18, 30);
+  m.position.copy(c); m.lookAt(camera.position); m.rotateZ(rand(-.45, -.25));
+  scene.add(m);
+  shooting.push({ m, life:0, max: big ? 1.8 : 1.1, speed: big ? 22 : 32 });
+}
+
 const hearts = [];
 const heartMats = [0xff2e63, 0xff6fa8, 0xff9ecb, 0xe0115f].map(c => std(c, { roughness:.3, metalness:.25, emissive:c, emissiveIntensity:.35 }));
 for (let i = 0; i < 38; i++) {
   const h = new THREE.Mesh(HEART, heartMats[i % heartMats.length]);
   let x, z;
   do { x = rand(-20, 20); z = rand(-22, 8); } while (Math.hypot(x, z) < 6);
-  h.position.set(x, rand(-2, 16), z);
-  h.scale.setScalar(rand(0.35, 0.9));
-  h.userData = { speed: rand(.3, .8), spin: rand(.3, 1.2) * (Math.random() < .5 ? -1 : 1), phase: rand(0, 6) };
+  h.position.set(x, rand(-2, 16), z); h.scale.setScalar(rand(.35, .9));
+  h.userData = { speed:rand(.3, .8), spin:rand(.3, 1.2) * (Math.random() < .5 ? -1 : 1), phase:rand(0, 6) };
   scene.add(h); hearts.push(h);
 }
 
-/* ---------------- Balloons ---------------- */
+/* =========================================================
+   PARTY STUFF: balloons, confetti, petals, particle bursts
+   ========================================================= */
 const balloons = [];
 const balloonColors = [0xff4f9a, 0xffc04d, 0xff2e63, 0xb38cff, 0x5ad1ff, 0xffffff, 0xff8a5c];
 for (let i = 0; i < 12; i++) {
   const g = new THREE.Group();
   const c = balloonColors[i % balloonColors.length];
   const m = std(c, { roughness:.18, metalness:.15, emissive:c, emissiveIntensity:.12 });
-  const ball = new THREE.Mesh(new THREE.SphereGeometry(0.55, 32, 24), m); ball.scale.y = 1.2; g.add(ball);
-  const knot = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.14, 12), m); knot.position.y = -0.7; g.add(knot);
-  const pts = []; for (let k = 0; k <= 12; k++) pts.push(new THREE.Vector3(Math.sin(k*.9)*.06, -0.76 - k*0.17, 0));
+  const ball = new THREE.Mesh(new THREE.SphereGeometry(.55, 32, 24), m); ball.scale.y = 1.2; g.add(ball);
+  const knot = new THREE.Mesh(new THREE.ConeGeometry(.09, .14, 12), m); knot.position.y = -.7; g.add(knot);
+  const pts = []; for (let k = 0; k <= 12; k++) pts.push(new THREE.Vector3(Math.sin(k*.9)*.06, -.76 - k*.17, 0));
   g.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color:0xffffff, transparent:true, opacity:.6 })));
-  g.visible = false; scene.add(g);
+  g.userData = { color:c }; g.visible = false; scene.add(g);
   balloons.push(g);
 }
 function spawnBalloon(b, first) {
   let x, z;
   do { x = rand(-11, 11); z = rand(-9, 4); } while (Math.hypot(x, z) < 3.8);
   b.position.set(x, first ? rand(-10, -2) : -4, z);
-  b.userData = { speed: rand(.9, 1.6), phase: rand(0, 6) };
+  Object.assign(b.userData, { speed:rand(.9, 1.6), phase:rand(0, 6) });
   b.visible = true;
 }
 
-/* ---------------- Confetti ---------------- */
+// confetti
 const CONF = 500;
-const confetti = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.12, 0.2), new THREE.MeshBasicMaterial({ side:THREE.DoubleSide }), CONF);
+const confetti = new THREE.InstancedMesh(new THREE.PlaneGeometry(.12, .2), new THREE.MeshBasicMaterial({ side:THREE.DoubleSide }), CONF);
 confetti.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 const confPalette = [0xff4f9a, 0xffd27f, 0x7ae7ff, 0xb38cff, 0xffffff, 0xff8a5c, 0x8cff9e].map(c => new THREE.Color(c));
 const confData = [];
@@ -353,30 +503,25 @@ for (let i = 0; i < CONF; i++) {
   confData.push({ p:new THREE.Vector3(), v:new THREE.Vector3(), r:new THREE.Vector3(), rv:new THREE.Vector3(), alive:false });
   dummy.scale.setScalar(0); dummy.updateMatrix(); confetti.setMatrixAt(i, dummy.matrix);
 }
-confetti.instanceColor.needsUpdate = true;
-confetti.frustumCulled = false;
-scene.add(confetti);
+confetti.instanceColor.needsUpdate = true; confetti.frustumCulled = false; scene.add(confetti);
 
 function burstConfetti() {
   confData.forEach(d => {
-    d.p.set(rand(-.3, .3), t3 + 0.9, rand(-.3, .3));
+    d.p.set(rand(-.3, .3), t3 + .9, rand(-.3, .3));
     const a = rand(0, Math.PI*2), s = rand(2, 7);
     d.v.set(Math.cos(a)*s, rand(7, 13), Math.sin(a)*s);
-    d.r.set(rand(0, 6), rand(0, 6), rand(0, 6));
-    d.rv.set(rand(-8, 8), rand(-8, 8), rand(-8, 8));
+    d.r.set(rand(0, 6), rand(0, 6), rand(0, 6)); d.rv.set(rand(-8, 8), rand(-8, 8), rand(-8, 8));
     d.alive = true;
   });
 }
 function updateConfetti(dt, t) {
   confData.forEach((d, i) => {
     if (d.alive) {
-      d.v.y -= 9.8 * dt;
-      d.v.x *= 0.985; d.v.z *= 0.985;
-      if (d.v.y < -1.8) d.v.y = -1.8;           // flutter down slowly
-      d.p.addScaledVector(d.v, dt);
-      d.p.x += Math.sin(t*3 + i) * dt * 0.6;
+      d.v.y -= 9.8 * dt; d.v.x *= .985; d.v.z *= .985;
+      if (d.v.y < -1.8) d.v.y = -1.8;
+      d.p.addScaledVector(d.v, dt); d.p.x += Math.sin(t*3 + i) * dt * .6;
       d.r.addScaledVector(d.rv, dt);
-      if (d.p.y < 0.02) { d.p.y = 0.02; d.v.set(0, 0, 0); d.rv.set(0, 0, 0); }
+      if (d.p.y < .02) { d.p.y = .02; d.v.set(0, 0, 0); d.rv.set(0, 0, 0); }
       dummy.position.copy(d.p); dummy.rotation.set(d.r.x, d.r.y, d.r.z); dummy.scale.setScalar(1);
     } else dummy.scale.setScalar(0);
     dummy.updateMatrix(); confetti.setMatrixAt(i, dummy.matrix);
@@ -384,43 +529,122 @@ function updateConfetti(dt, t) {
   confetti.instanceMatrix.needsUpdate = true;
 }
 
-/* ---------------- Fireworks ---------------- */
-const fireworks = [];
-function launchFirework() {
-  const n = 160, pos = new Float32Array(n * 3), vel = [];
-  const origin = new THREE.Vector3(rand(-14, 14), rand(9, 16), rand(-18, -6));
-  for (let i = 0; i < n; i++) {
-    pos.set([origin.x, origin.y, origin.z], i*3);
-    const th = rand(0, Math.PI*2), ph = Math.acos(rand(-1, 1)), s = rand(3, 5.5);
-    vel.push(new THREE.Vector3(s*Math.sin(ph)*Math.cos(th), s*Math.cos(ph), s*Math.sin(ph)*Math.sin(th)));
-  }
-  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  const color = new THREE.Color().setHSL(Math.random(), 1, 0.65);
-  const pts = new THREE.Points(g, new THREE.PointsMaterial({ size:.35, map:dotTex, color, transparent:true, depthWrite:false, blending:THREE.AdditiveBlending, fog:false }));
-  scene.add(pts);
-  fireworks.push({ pts, vel, life:0, max:2.2 });
+// rose petals
+const PETALS = 170;
+const petalGeo = new THREE.CircleGeometry(.13, 10); petalGeo.scale(1, .62, 1);
+const petals = new THREE.InstancedMesh(petalGeo, new THREE.MeshStandardMaterial({ side:THREE.DoubleSide, roughness:.6 }), PETALS);
+petals.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+const petalPalette = [0xd6002a, 0xff2e63, 0xff7eb3, 0xffc2d6].map(c => new THREE.Color(c));
+const petalData = [];
+for (let i = 0; i < PETALS; i++) {
+  petals.setColorAt(i, petalPalette[i % petalPalette.length]);
+  petalData.push({ p:new THREE.Vector3(0, -10, 0), r:new THREE.Vector3(rand(0, 6), rand(0, 6), rand(0, 6)), rv:new THREE.Vector3(rand(-2, 2), rand(-2, 2), rand(-2, 2)), fall:rand(.6, 1.3), phase:rand(0, 6), alive:false });
+  dummy.scale.setScalar(0); dummy.updateMatrix(); petals.setMatrixAt(i, dummy.matrix);
 }
-function updateFireworks(dt) {
-  for (let f = fireworks.length - 1; f >= 0; f--) {
-    const fw = fireworks[f]; fw.life += dt;
-    const a = fw.pts.geometry.attributes.position;
-    fw.vel.forEach((v, i) => {
-      v.y -= 2.5 * dt; v.multiplyScalar(0.975);
+petals.instanceColor.needsUpdate = true; petals.frustumCulled = false; scene.add(petals);
+let petalsOn = false;
+function resetPetal(d, first) { d.p.set(rand(-13, 13), first ? rand(8, 26) : rand(15, 19), rand(-11, 7)); d.alive = true; }
+function updatePetals(dt, t) {
+  petalData.forEach((d, i) => {
+    if (d.alive) {
+      d.p.y -= d.fall * dt;
+      d.p.x += Math.sin(t * 1.2 + d.phase) * dt * .8;
+      d.p.z += Math.cos(t * .9 + d.phase) * dt * .4;
+      d.r.addScaledVector(d.rv, dt);
+      if (d.p.y < 0) { if (petalsOn) resetPetal(d, false); else d.alive = false; }
+      dummy.position.copy(d.p); dummy.rotation.set(d.r.x, d.r.y, d.r.z); dummy.scale.setScalar(1);
+    } else dummy.scale.setScalar(0);
+    dummy.updateMatrix(); petals.setMatrixAt(i, dummy.matrix);
+  });
+  petals.instanceMatrix.needsUpdate = true;
+}
+
+// generic glowing particle bursts (fireworks, sparkles, balloon pops)
+const bursts = [];
+function burst(origin, color, vels, o = {}) {
+  const n = vels.length, pos = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) pos.set([origin.x, origin.y, origin.z], i * 3);
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const pts = new THREE.Points(g, new THREE.PointsMaterial({ size:o.size || .3, map:dotTex, color, transparent:true, depthWrite:false, blending:THREE.AdditiveBlending, fog:false }));
+  pts.frustumCulled = false;
+  scene.add(pts);
+  bursts.push({ pts, vels, life:0, max:o.life || 2, gravity:o.gravity ?? 2.5, drag:o.drag ?? .975 });
+}
+function sphereVels(n, speed) {
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const th = rand(0, Math.PI*2), ph = Math.acos(rand(-1, 1)), s = speed * rand(.6, 1);
+    out.push(new THREE.Vector3(s*Math.sin(ph)*Math.cos(th), s*Math.cos(ph), s*Math.sin(ph)*Math.sin(th)));
+  }
+  return out;
+}
+function heartVels(n, scale) {
+  const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+  const up = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const t = (i / n) * Math.PI * 2;
+    const x = 16 * Math.pow(Math.sin(t), 3), y = 13*Math.cos(t) - 5*Math.cos(2*t) - 2*Math.cos(3*t) - Math.cos(4*t);
+    out.push(right.clone().multiplyScalar(x * scale).addScaledVector(up, y * scale));
+  }
+  return out;
+}
+function updateBursts(dt) {
+  for (let b = bursts.length - 1; b >= 0; b--) {
+    const B = bursts[b]; B.life += dt;
+    const a = B.pts.geometry.attributes.position, dr = Math.pow(B.drag, dt * 60);
+    B.vels.forEach((v, i) => {
+      v.y -= B.gravity * dt; v.multiplyScalar(dr);
       a.array[i*3] += v.x*dt; a.array[i*3+1] += v.y*dt; a.array[i*3+2] += v.z*dt;
     });
     a.needsUpdate = true;
-    fw.pts.material.opacity = Math.max(0, 1 - fw.life / fw.max);
-    if (fw.life > fw.max) { scene.remove(fw.pts); fw.pts.geometry.dispose(); fw.pts.material.dispose(); fireworks.splice(f, 1); }
+    const k = B.life / B.max;
+    B.pts.material.opacity = Math.max(0, 1 - k * k);
+    if (B.life > B.max) { scene.remove(B.pts); B.pts.geometry.dispose(); B.pts.material.dispose(); bursts.splice(b, 1); }
   }
 }
 
-/* ---------------- Smoke ---------------- */
+// fireworks: a rocket whistles up, then explodes (every 3rd one is a heart)
+const rockets = [];
+let fwCount = 0;
+function launchFirework() {
+  const fwd = TMP.subVectors(controls.target, camera.position).setY(0).normalize();
+  const right = new THREE.Vector3(-fwd.z, 0, fwd.x);
+  const to = controls.target.clone().addScaledVector(fwd, rand(12, 22)).addScaledVector(right, rand(-14, 14));
+  to.y = rand(10, 16);
+  const from = to.clone().setY(0).add(new THREE.Vector3(rand(-2, 2), 0, rand(-2, 2)));
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map:dotTex, color:0xffe0b0, blending:THREE.AdditiveBlending, depthWrite:false, transparent:true, fog:false }));
+  s.scale.setScalar(.4); s.position.copy(from); scene.add(s);
+  const dur = rand(.9, 1.3);
+  rockets.push({ s, from, to, t:0, dur, heart: ++fwCount % 3 === 0 });
+  if (AC) SFX.whistle(dur);
+}
+function updateRockets(dt) {
+  for (let i = rockets.length - 1; i >= 0; i--) {
+    const r = rockets[i]; r.t += dt;
+    const k = Math.min(1, r.t / r.dur);
+    r.s.position.lerpVectors(r.from, r.to, 1 - (1 - k) * (1 - k));
+    if (Math.random() < .6) burst(r.s.position, 0xffc480, sphereVels(2, .4), { size:.15, life:.5, gravity:1 });
+    if (k >= 1) {
+      scene.remove(r.s); r.s.material.dispose(); rockets.splice(i, 1);
+      const col = new THREE.Color().setHSL(r.heart ? rand(.9, 1) : Math.random(), 1, .65);
+      if (r.heart) burst(r.to, col, heartVels(150, .22), { size:.38, life:2.4, gravity:.6, drag:.965 });
+      else {
+        burst(r.to, col, sphereVels(170, 5.5), { size:.35, life:2.2 });
+        burst(r.to, new THREE.Color().setHSL(Math.random(), 1, .75), sphereVels(60, 2.5), { size:.25, life:1.8 });
+      }
+      if (AC) SFX.boom(.8);
+    }
+  }
+}
+
+// candle smoke
 const smoke = [];
 function puffSmoke(pos) {
   for (let i = 0; i < 10; i++) {
     const s = new THREE.Sprite(new THREE.SpriteMaterial({ map:dotTex, color:0xcccccc, transparent:true, opacity:0, depthWrite:false }));
-    s.position.copy(pos); s.scale.setScalar(0.1); cake.add(s);
-    smoke.push({ s, life: -i * 0.08, max: 2.2, drift: rand(-.15, .15) });
+    s.position.copy(pos); s.scale.setScalar(.1); cake.add(s);
+    smoke.push({ s, life:-i * .08, max:2.2, drift:rand(-.15, .15) });
   }
 }
 function updateSmoke(dt) {
@@ -428,118 +652,185 @@ function updateSmoke(dt) {
     const p = smoke[i]; p.life += dt;
     if (p.life < 0) continue;
     const k = p.life / p.max;
-    p.s.position.y += dt * 0.6; p.s.position.x += p.drift * dt;
-    p.s.scale.setScalar(0.1 + k * 0.7);
-    p.s.material.opacity = 0.35 * Math.sin(Math.PI * Math.min(k, 1));
+    p.s.position.y += dt * .6; p.s.position.x += p.drift * dt;
+    p.s.scale.setScalar(.1 + k * .7);
+    p.s.material.opacity = .35 * Math.sin(Math.PI * Math.min(k, 1));
     if (k >= 1) { cake.remove(p.s); p.s.material.dispose(); smoke.splice(i, 1); }
   }
 }
 
-/* ---------------- Audio ---------------- */
-let actx, master, musicEl, songEndsAt = 0;
-function ctx() {
-  if (!actx) {
-    actx = new (window.AudioContext || window.webkitAudioContext)();
-    master = actx.createGain(); master.gain.value = 0.9; master.connect(actx.destination);
+/* =========================================================
+   SKY MESSAGE — thousands of sparkles form a heart, then her name
+   ========================================================= */
+const SKY_N = 2600;
+const sky = { on:false, group:new THREE.Group(), cur:new Float32Array(SKY_N * 3), tgt:null, spd:new Float32Array(SKY_N) };
+const skyGeo = new THREE.BufferGeometry();
+skyGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(SKY_N * 3), 3));
+(() => {
+  const col = new Float32Array(SKY_N * 3);
+  const choices = [[1, .45, .7], [1, .82, .5], [1, .9, .95], [1, .3, .55]];
+  for (let i = 0; i < SKY_N; i++) { col.set(choices[i % choices.length], i * 3); sky.spd[i] = rand(1.2, 3); }
+  skyGeo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+})();
+const skyMat = new THREE.PointsMaterial({ size:.14, map:dotTex, vertexColors:true, transparent:true, depthWrite:false, blending:THREE.AdditiveBlending, fog:false, opacity:0 });
+const skyPts = new THREE.Points(skyGeo, skyMat); skyPts.frustumCulled = false;
+sky.group.add(skyPts); sky.group.visible = false; scene.add(sky.group);
+
+function sampleShape(draw, worldW) {
+  const W = 1000, H = 420, c = document.createElement('canvas'); c.width = W; c.height = H;
+  const g = c.getContext('2d'); g.fillStyle = '#fff'; draw(g, W, H);
+  const d = g.getImageData(0, 0, W, H).data, pts = [];
+  for (let y = 0; y < H; y += 4) for (let x = 0; x < W; x += 4) if (d[(y*W + x)*4 + 3] > 128) pts.push([x, y]);
+  for (let i = pts.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pts[i], pts[j]] = [pts[j], pts[i]]; }
+  const out = new Float32Array(SKY_N * 3), s = worldW / W;
+  for (let i = 0; i < SKY_N; i++) {
+    const p = pts[i % pts.length] || [W/2, H/2];
+    out[i*3] = (p[0] - W/2) * s + rand(-.03, .03);
+    out[i*3+1] = -(p[1] - H/2) * s + rand(-.03, .03);
+    out[i*3+2] = rand(-.2, .2);
   }
-  return actx;
+  return out;
 }
-function note(freq, start, dur, vol = 0.16) {
-  const c = ctx();
-  [[1, 'triangle', vol], [2, 'sine', vol * 0.25], [3, 'sine', vol * 0.08]].forEach(([mul, type, v]) => {
-    const o = c.createOscillator(), g = c.createGain();
-    o.type = type; o.frequency.value = freq * mul;
-    g.gain.setValueAtTime(0, start);
-    g.gain.linearRampToValueAtTime(v, start + 0.02);
-    g.gain.exponentialRampToValueAtTime(0.0008, start + Math.max(dur * 1.4, 0.3));
-    o.connect(g).connect(master); o.start(start); o.stop(start + dur * 1.5 + 0.1);
-  });
-}
-const N = { C3:130.81, F3:174.61, G3:196, C4:261.63, G4:392, A4:440, B4:493.88, C5:523.25, D5:587.33, E5:659.25, F5:698.46, G5:783.99 };
-function playHappyBirthday() {
-  if (CONFIG.music) {
-    if (!musicEl) { musicEl = new Audio(CONFIG.music); musicEl.loop = true; }
-    musicEl.currentTime = 0; musicEl.play().catch(() => {});
-    songEndsAt = performance.now() + 4000;
-    return;
+const drawHeart = (g, W, H) => {
+  g.beginPath();
+  for (let i = 0; i <= 200; i++) {
+    const t = i / 200 * Math.PI * 2;
+    const x = 16 * Math.pow(Math.sin(t), 3), y = 13*Math.cos(t) - 5*Math.cos(2*t) - 2*Math.cos(3*t) - Math.cos(4*t);
+    i ? g.lineTo(W/2 + x*12, H/2 - y*12 - 10) : g.moveTo(W/2 + x*12, H/2 - y*12 - 10);
   }
-  const melody = [
-    ['G4',.75],['G4',.25],['A4',1],['G4',1],['C5',1],['B4',2],
-    ['G4',.75],['G4',.25],['A4',1],['G4',1],['D5',1],['C5',2],
-    ['G4',.75],['G4',.25],['G5',1],['E5',1],['C5',1],['B4',1],['A4',2],
-    ['F5',.75],['F5',.25],['E5',1],['C5',1],['D5',1],['C5',3],
-  ];
-  const beat = 0.42; let t = ctx().currentTime + 0.3;
-  const bass = [['C3',3],['G3',3],['G3',3],['C3',3],['C3',3],['F3',3],['C3',2],['G3',1],['C3',3]];
-  let bt = t + 2 * beat * 0 + beat; // bass enters on first downbeat
-  bass.forEach(([n, d]) => { note(N[n], bt, d * beat, 0.07); bt += d * beat; });
-  melody.forEach(([n, d]) => { note(N[n], t, d * beat); t += d * beat; });
-  songEndsAt = performance.now() + (t - ctx().currentTime) * 1000;
+  g.fill();
+};
+const drawName = (g, W, H) => {
+  let fs = 250;
+  const setF = () => g.font = `${fs}px "Great Vibes", cursive`;
+  setF(); while (g.measureText(CONFIG.name).width > W * .92 && fs > 40) { fs -= 10; setF(); }
+  g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(CONFIG.name, W/2, H/2);
+};
+function skyWidth() {
+  const d = 18, visW = 2 * d * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect;
+  return Math.min(13, visW * .9);
 }
-function playChime() {
-  const t = ctx().currentTime;
-  ['C5','E5','G5','C5','E5','G5'].forEach((n, i) => note(N[n] * (i > 2 ? 2 : 1), t + i * 0.09, 0.6, 0.1));
+function startSky() {
+  for (let i = 0; i < SKY_N; i++) { sky.cur[i*3] = rand(-.4, .4); sky.cur[i*3+1] = rand(-4.6, -3.8); sky.cur[i*3+2] = rand(2.5, 3.5); }
+  sky.tgt = sampleShape(drawHeart, skyWidth());
+  sky.on = true; sky.group.visible = true; skyMat.opacity = 0;
+}
+async function skyToName() {
+  try { await document.fonts.load('250px "Great Vibes"'); } catch (e) {}
+  sky.tgt = sampleShape(drawName, skyWidth());
+  SFX.magic();
+}
+function updateSky(dt, t) {
+  if (!sky.on) return;
+  // keep the message floating behind the cake, facing the camera
+  const fwd = TMP.subVectors(controls.target, camera.position).setY(0).normalize();
+  sky.group.position.set(controls.target.x + fwd.x * 3, 8.4, controls.target.z + fwd.z * 3);
+  sky.group.quaternion.copy(camera.quaternion);
+  skyMat.opacity = Math.min(1, skyMat.opacity + dt * .8);
+  const pa = skyGeo.attributes.position.array;
+  for (let i = 0; i < SKY_N; i++) {
+    const k = Math.min(1, dt * sky.spd[i]);
+    for (let a = 0; a < 3; a++) {
+      const j = i*3 + a;
+      sky.cur[j] += (sky.tgt[j] - sky.cur[j]) * k;
+      pa[j] = sky.cur[j] + Math.sin(t * 2.3 + i * 1.7 + a) * .025;
+    }
+  }
+  skyGeo.attributes.position.needsUpdate = true;
 }
 
-/* ---------------- Microphone (blow detection) ---------------- */
+/* =========================================================
+   MICROPHONE (blow detection)
+   ========================================================= */
 let analyser, micData, micStream, blowFrames = 0;
 async function startMic() {
+  if (micStream) return true;
   try {
-    micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation:true, noiseSuppression:false } });
-    const src = ctx().createMediaStreamSource(micStream);
-    analyser = ctx().createAnalyser(); analyser.fftSize = 1024;
+    micStream = await navigator.mediaDevices.getUserMedia({ audio:{ echoCancellation:true, noiseSuppression:false } });
+    const src = AC.createMediaStreamSource(micStream);
+    analyser = AC.createAnalyser(); analyser.fftSize = 1024;
     src.connect(analyser); micData = new Uint8Array(analyser.fftSize);
     return true;
   } catch (e) { return false; }
+}
+function stopMic() {
+  if (micStream) micStream.getTracks().forEach(t => t.stop());
+  micStream = null; analyser = null;
 }
 function checkBlow() {
   if (!analyser) return;
   analyser.getByteTimeDomainData(micData);
   let sum = 0;
   for (let i = 0; i < micData.length; i++) { const v = (micData[i] - 128) / 128; sum += v * v; }
-  const rms = Math.sqrt(sum / micData.length);
-  blowFrames = rms > 0.16 ? blowFrames + 1 : Math.max(0, blowFrames - 1);
+  blowFrames = Math.sqrt(sum / micData.length) > .16 ? blowFrames + 1 : Math.max(0, blowFrames - 1);
   if (blowFrames > 10) blowOut();
 }
 
-/* ---------------- Story / state ---------------- */
-let started = false, introT = 0, canBlow = false, celebrated = false, hintShown = false;
+/* =========================================================
+   STORY
+   intro → swoop → gift → opening → lighting → song → wish → party
+   ========================================================= */
+const S = { phase:'intro', t:0 };
+const setPhase = p => { S.phase = p; S.t = 0; };
+let micOK = false, cakeRising = false, cardShown = false, skyNamed = false, fwTimer = 0, starTimer = 3;
+let camTween = null;
+
+function tweenCamera(toP, toT, dur, arc = 0) {
+  camTween = { fromP:camera.position.clone(), toP, fromT:controls.target.clone(), toT, t:0, dur, arc };
+  controls.enabled = false;
+}
+function hint(text) { const h = $('hint'); h.textContent = text; h.classList.add('show'); }
+function hideHint() { $('hint').classList.remove('show'); }
 
 function spell(el, text, delay) {
   el.innerHTML = [...text].map((ch, i) =>
-    `<span class="l" style="animation-delay:${delay + i * 0.07}s">${ch === ' ' ? '&nbsp;' : ch}</span>`).join('');
+    `<span class="l" style="animation-delay:${delay + i * .07}s">${ch === ' ' ? '&nbsp;' : ch}</span>`).join('');
+  const scale = [1046.5, 1174.7, 1318.5, 1568, 1760, 2093];
+  [...text].forEach((ch, i) => { if (ch !== ' ') SFX.tink(scale[i % scale.length], delay + i * .07 + .15, .025); });
 }
 
 $('openBtn').addEventListener('click', async () => {
-  ctx().resume();
+  audioInit(); AC.resume();
   $('intro').classList.add('hide');
-  started = true;
-  playHappyBirthday();
-  spell($('t1'), 'Happy Birthday', 1.2);
-  spell($('t2'), CONFIG.name, 2.4);
-  const micOK = await startMic();
-  $('hint').dataset.text = micOK
-    ? '🌠 Make a wish… then blow into the mic (or tap the cake)'
-    : '🌠 Make a wish… then tap the cake to blow the candles';
+  $('mute').style.display = 'block';
+  SFX.heartbeat(); SFX.whoosh();
+  setPhase('swoop');
+  tweenCamera(CAM_END.clone(), new THREE.Vector3(0, 2.4, 0), 4.5, 8);
+  micOK = await startMic();
 });
 
-function blowOut() {
-  if (!canBlow || celebrated) return;
-  celebrated = true; canBlow = false;
-  $('hint').classList.remove('show');
-  candles.forEach((c, i) => setTimeout(() => { c.lit = false; puffSmoke(c.flame.position); }, i * 90));
-  if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; analyser = null; }
-  setTimeout(celebrate, 700);
+function openGift() {
+  setPhase('opening');
+  hideHint();
+  SFX.popper();
+  lidV.set(rand(-1.5, 1.5), 7.5, -2.5);
+  burst(new THREE.Vector3(0, GH + .3, 0), 0xffd27f, sphereVels(140, 4.5), { size:.22, life:1.6, gravity:3 });
+  burst(new THREE.Vector3(0, GH + .3, 0), 0xff7eb3, sphereVels(80, 3), { size:.18, life:1.4, gravity:3 });
 }
 
-let fwTimer = 0;
+function blowOut() {
+  if (S.phase !== 'wish') return;
+  setPhase('blown');
+  hideHint();
+  SFX.wind();
+  candles.forEach((c, i) => setTimeout(() => { c.lit = false; puffSmoke(c.flame.position); }, i * 90));
+  stopMic();
+  setTimeout(() => { shootingStar(true); SFX.sparkle(16, 0); }, 500);
+  setTimeout(celebrate, 1100);
+}
+
 function celebrate() {
-  playChime();
+  setPhase('party');
+  SFX.popper(); setTimeout(() => SFX.popper(), 180);
   burstConfetti();
   balloons.forEach(b => spawnBalloon(b, true));
+  petalsOn = true; petalData.forEach(d => resetPetal(d, true));
+  $('title').classList.add('fade');
   controls.autoRotate = true;
-  for (let i = 0; i < 4; i++) setTimeout(launchFirework, i * 350);
-  setTimeout(showCard, 2600);
+  const dir = TMP.subVectors(camera.position, controls.target).setY(0).normalize();
+  const target = new THREE.Vector3(0, 4.4, 0);
+  tweenCamera(target.clone().addScaledVector(dir, 15).setY(6.6), target, 2.5);
+  fwTimer = .4;
 }
 
 function showCard() {
@@ -547,6 +838,7 @@ function showCard() {
   if (CONFIG.photo) { $('photo').src = CONFIG.photo; $('photo').style.display = 'inline-block'; }
   card.querySelector('h3').textContent = CONFIG.name;
   card.classList.add('show');
+  SFX.magic();
   const msg = $('msg'); msg.innerHTML = '';
   $('from').textContent = CONFIG.from; $('from').classList.remove('show');
   const text = CONFIG.message; let i = 0;
@@ -554,84 +846,161 @@ function showCard() {
     if (!card.classList.contains('show')) return;
     msg.innerHTML = text.slice(0, i).replace(/&/g, '&amp;').replace(/</g, '&lt;') + '<span class="cursor"></span>';
     if (i++ < text.length) setTimeout(type, text[i - 2] === '\n' ? 350 : 45);
-    else { msg.innerHTML = msg.innerHTML.replace('<span class="cursor"></span>', ''); $('from').classList.add('show'); }
+    else { msg.innerHTML = msg.innerHTML.replace('<span class="cursor"></span>', ''); $('from').classList.add('show'); SFX.sparkle(8); }
   };
   type();
 }
 $('closeCard').onclick = () => $('card').classList.remove('show');
 $('replay').onclick = async () => {
   $('card').classList.remove('show');
-  candles.forEach(c => { c.lit = true; });
-  celebrated = false; canBlow = false; hintShown = false;
+  candles.forEach(c => c.lit = false);
   confData.forEach(d => d.alive = false);
   balloons.forEach(b => b.visible = false);
+  petalsOn = false;
+  sky.on = false; sky.group.visible = false;
+  cardShown = false; skyNamed = false;
   controls.autoRotate = false;
-  playHappyBirthday();
-  await startMic();
+  const dir = TMP.subVectors(camera.position, controls.target).setY(0).normalize();
+  const target = new THREE.Vector3(0, 2.4, 0);
+  tweenCamera(target.clone().addScaledVector(dir, 10.5).setY(4.8), target, 2);
+  setPhase('lighting');
+  micOK = await startMic();
 };
 
-// tap (not drag) on the scene = blow the candles
+/* ---------------- Tapping ---------------- */
+const raycaster = new THREE.Raycaster(); raycaster.params.Line.threshold = .05;
+const pointer = new THREE.Vector2();
 let downAt = null;
 renderer.domElement.addEventListener('pointerdown', e => downAt = { x:e.clientX, y:e.clientY, t:performance.now() });
 renderer.domElement.addEventListener('pointerup', e => {
   if (!downAt) return;
-  const moved = Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y);
-  if (moved < 8 && performance.now() - downAt.t < 400) blowOut();
+  const tap = Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) < 8 && performance.now() - downAt.t < 400;
   downAt = null;
+  if (!tap) return;
+  pointer.set(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+  raycaster.setFromCamera(pointer, camera);
+  // pop a balloon?
+  const hit = raycaster.intersectObjects(balloons.filter(b => b.visible), true)[0];
+  if (hit) {
+    let b = hit.object; while (!balloons.includes(b)) b = b.parent;
+    b.visible = false;
+    SFX.balloon();
+    burst(b.position.clone(), b.userData.color, sphereVels(70, 4), { size:.22, life:1.1, gravity:5 });
+    setTimeout(() => { if (S.phase === 'party') spawnBalloon(b, false); }, 2500);
+    return;
+  }
+  if (S.phase === 'gift') openGift();
+  else if (S.phase === 'wish') blowOut();
 });
 
 /* ---------------- Resize ---------------- */
 function fit() {
   camera.aspect = innerWidth / innerHeight;
-  // pull the camera back on tall phone screens so the cake fits
-  camera.fov = camera.aspect < 0.8 ? 62 : 45;
+  camera.fov = camera.aspect < .8 ? 62 : 45;   // wider view on phones
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
 }
 addEventListener('resize', fit); fit();
 
-/* ---------------- Loop ---------------- */
+/* =========================================================
+   LOOP
+   ========================================================= */
 const clock = new THREE.Clock();
-const ease = x => 1 - Math.pow(1 - x, 3);
-
 function animate() {
   requestAnimationFrame(animate);
-  const dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime;
+  const dt = Math.min(clock.getDelta(), .05), t = clock.elapsedTime;
+  S.t += dt;
+  const s = S.t;
 
-  // intro camera swoop
-  if (started && introT < 1) {
-    introT = Math.min(1, introT + dt / 4.5);
-    camera.position.lerpVectors(CAM_START, CAM_END, ease(introT));
-    camera.position.x = Math.sin((1 - ease(introT)) * 1.2) * 8;
+  // camera moves
+  if (camTween) {
+    camTween.t += dt;
+    const k = ease(Math.min(1, camTween.t / camTween.dur));
+    camera.position.lerpVectors(camTween.fromP, camTween.toP, k);
+    camera.position.x += Math.sin(k * Math.PI) * camTween.arc;
+    controls.target.lerpVectors(camTween.fromT, camTween.toT, k);
     camera.lookAt(controls.target);
-    if (introT === 1) controls.enabled = true;
+    if (k >= 1) { camTween = null; controls.enabled = true; }
   }
   if (controls.enabled) controls.update();
 
-  // show "make a wish" once the song is done
-  if (started && !hintShown && !celebrated && songEndsAt && performance.now() > songEndsAt - 500) {
-    hintShown = true; canBlow = true;
-    const h = $('hint'); h.textContent = h.dataset.text || '🌠 Make a wish… then tap the cake'; h.classList.add('show');
+  /* ----- story ----- */
+  switch (S.phase) {
+    case 'swoop':
+      if (!camTween) { setPhase('gift'); hint('🎁 Tap the gift'); }
+      break;
+    case 'gift':
+      gift.rotation.z = Math.sin(t * 14) * .05 * Math.max(0, Math.sin(t * 1.8));
+      gift.position.y = Math.abs(Math.sin(t * 14)) * .06 * Math.max(0, Math.sin(t * 1.8));
+      break;
+    case 'opening': {
+      gift.rotation.z *= .8; gift.position.y *= .8;
+      lidV.y -= 9 * dt; lid.position.addScaledVector(lidV, dt);
+      lid.rotation.x += 2.5 * dt; lid.rotation.z += 1.5 * dt;
+      if (s > 1.1) lid.scale.setScalar(Math.max(.0001, 1 - (s - 1.1) / .6));
+      const th = ease(clamp01((s - .12) / .55)) * Math.PI / 2 * .98;
+      giftSides.forEach(p => p.rotation[p.userData.axis] = p.userData.sign * th);
+      if (s > .9) {
+        if (!cakeRising) {
+          cakeRising = true; SFX.magic();
+          burst(new THREE.Vector3(0, 1, 0), 0xffe3f0, sphereVels(120, 3.5), { size:.2, life:1.8, gravity:-.5 });
+        }
+        giftBase.scale.setScalar(Math.max(.0001, 1 - ease(clamp01((s - .9) / .8))));
+        cake.scale.setScalar(Math.max(.0001, elastic(clamp01((s - .9) / 1.4))));
+      }
+      if (s > 2.5) { gift.visible = false; cake.scale.setScalar(1); setPhase('lighting'); }
+      break;
+    }
+    case 'lighting':
+      candles.forEach((c, i) => {
+        if (!c.lit && s > .4 + i * .35) {
+          c.lit = true; SFX.fwip();
+          burst(c.flame.getWorldPosition(new THREE.Vector3()), 0xffc66b, sphereVels(25, 1.5), { size:.12, life:.7, gravity:1 });
+        }
+      });
+      if (s > .9 + candles.length * .35) {
+        setPhase('song');
+        playSong();
+        $('title').classList.remove('fade');
+        spell($('t1'), 'Happy Birthday', .3);
+        spell($('t2'), CONFIG.name, 1.5);
+      }
+      break;
+    case 'song':
+      if (performance.now() > songEndsAt - 300) {
+        setPhase('wish');
+        hint(micOK ? '🌠 Make a wish… then blow into the mic (or tap the cake)' : '🌠 Make a wish… then tap the cake to blow the candles');
+      }
+      break;
+    case 'wish':
+      checkBlow();
+      break;
+    case 'party':
+      fwTimer -= dt;
+      if (fwTimer <= 0) { launchFirework(); fwTimer = rand(.7, 1.6); }
+      if (s > 1.4 && !sky.on) { startSky(); SFX.magic(); }
+      if (s > 6.5 && !skyNamed) { skyNamed = true; skyToName(); }
+      if (s > 11 && !cardShown) { cardShown = true; showCard(); }
+      break;
   }
-  if (canBlow) checkBlow();
 
-  // candles
+  /* ----- candles ----- */
   candles.forEach(c => {
-    c.k += ((c.lit ? 1 : 0) - c.k) * Math.min(1, dt * (c.lit ? 3 : 14));
-    const fl = 1 + Math.sin(t * 18 + c.seed) * 0.08 + Math.sin(t * 31 + c.seed * 2) * 0.05;
-    c.flame.scale.set(0.2 * c.k * (2 - fl), 0.4 * c.k * fl, 1);
-    c.flame.material.rotation = Math.sin(t * 6 + c.seed) * 0.08;
-    c.glow.material.opacity = 0.45 * c.k * fl;
-    c.light.intensity = 0.9 * c.k * fl;
+    c.k += ((c.lit ? 1 : 0) - c.k) * Math.min(1, dt * (c.lit ? 4 : 14));
+    const fl = 1 + Math.sin(t * 18 + c.seed) * .08 + Math.sin(t * 31 + c.seed * 2) * .05;
+    c.flame.scale.set(Math.max(.0001, .2 * c.k * (2 - fl)), Math.max(.0001, .4 * c.k * fl), 1);
+    c.flame.material.rotation = Math.sin(t * 6 + c.seed) * .08;
+    c.glow.material.opacity = .45 * c.k * fl;
+    c.light.intensity = .9 * c.k * fl;
   });
 
-  topper.rotation.y = t * 0.8;
-  topper.position.y = t3 + 0.45 + Math.sin(t * 2) * 0.04;
+  topper.rotation.y = t * .8;
+  topper.position.y = t3 + .45 + Math.sin(t * 2) * .04;
 
   hearts.forEach(h => {
     const u = h.userData;
     h.position.y += u.speed * dt;
-    h.position.x += Math.sin(t * 0.6 + u.phase) * dt * 0.3;
+    h.position.x += Math.sin(t * .6 + u.phase) * dt * .3;
     h.rotation.y += u.spin * dt;
     if (h.position.y > 18) h.position.y = -3;
   });
@@ -640,30 +1009,42 @@ function animate() {
     if (!b.visible) return;
     const u = b.userData;
     b.position.y += u.speed * dt;
-    b.position.x += Math.sin(t + u.phase) * dt * 0.4;
-    b.rotation.z = Math.sin(t * 1.3 + u.phase) * 0.12;
+    b.position.x += Math.sin(t + u.phase) * dt * .4;
+    b.rotation.z = Math.sin(t * 1.3 + u.phase) * .12;
     if (b.position.y > 20) spawnBalloon(b, false);
   });
 
-  // party mood after the candles are out
-  const party = celebrated ? 1 : 0;
-  ambient.intensity += ((celebrated ? 0.6 : 0.35) - ambient.intensity) * dt;
+  // random shooting stars
+  if (S.phase !== 'intro') {
+    starTimer -= dt;
+    if (starTimer <= 0) { shootingStar(false); starTimer = rand(3, 7); }
+  }
+  for (let i = shooting.length - 1; i >= 0; i--) {
+    const st = shooting[i]; st.life += dt;
+    st.m.translateX(st.speed * dt);
+    const k = st.life / st.max;
+    st.m.material.opacity = Math.sin(Math.PI * Math.min(k, 1));
+    if (k >= 1) { scene.remove(st.m); st.m.geometry.dispose(); st.m.material.dispose(); shooting.splice(i, 1); }
+  }
+
+  // party mood
+  const party = S.phase === 'party' ? 1 : 0;
+  ambient.intensity += ((party ? .6 : .35) - ambient.intensity) * dt;
   partyLights.forEach((l, i) => {
-    const a = t * 0.9 + i * (Math.PI * 2 / 3);
+    const a = t * .9 + i * (Math.PI * 2 / 3);
     l.position.set(Math.cos(a) * 5, 4 + Math.sin(t * 1.5 + i) * 1.5, Math.sin(a) * 5);
     l.intensity += (party * 1.4 - l.intensity) * dt * 2;
   });
-  if (celebrated) {
-    fwTimer -= dt;
-    if (fwTimer <= 0) { launchFirework(); fwTimer = rand(0.6, 1.4); }
-  }
 
-  stars.rotation.y = t * 0.01;
-  stars.material.opacity = 0.75 + Math.sin(t * 2) * 0.2;
+  stars.rotation.y = t * .01;
+  stars.material.opacity = .75 + Math.sin(t * 2) * .2;
 
   updateConfetti(dt, t);
-  updateFireworks(dt);
+  updatePetals(dt, t);
+  updateRockets(dt);
+  updateBursts(dt);
   updateSmoke(dt);
+  updateSky(dt, t);
 
   renderer.render(scene, camera);
 }
